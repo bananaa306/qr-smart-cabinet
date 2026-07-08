@@ -1,0 +1,97 @@
+@import "tailwindcss";
+
+/* ---- Theme tokens (tinted neutrals, no pure black/gray per PRD §A.1) ---- */
+:root {
+  --bg: #f4f6f7;
+  --surface: #ffffff;
+  --surface-2: #eef2f3;
+  --border: #d8e0e2;
+  --ink: #14201f;
+  --ink-soft: #47585a;
+  --ink-mute: #6b7d7e;
+  --brand: #0f9488;
+  --brand-ink: #0a6960;
+  --brand-soft: #dcf2ef;
+  --success: #1f9d55;
+  --success-soft: #dcf3e6;
+  --warn: #b7791f;
+  --warn-soft: #fbeed4;
+  --danger: #c53434;
+  --danger-soft: #fbe2e2;
+  --ring: rgba(15, 148, 136, 0.35);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #0c1413;
+    --surface: #121d1c;
+    --surface-2: #182625;
+    --border: #263a38;
+    --ink: #e7efee;
+    --ink-soft: #a6b8b6;
+    --ink-mute: #7e928f;
+    --brand: #2dd4bf;
+    --brand-ink: #99f6e4;
+    --brand-soft: #123734;
+    --success: #4ade80;
+    --success-soft: #143726;
+    --warn: #e0b34d;
+    --warn-soft: #3a2f14;
+    --danger: #f27575;
+    --danger-soft: #3a1a1a;
+    --ring: rgba(45, 212, 191, 0.4);
+  }
+}
+
+@theme inline {
+  --color-bg: var(--bg);
+  --color-surface: var(--surface);
+  --color-surface-2: var(--surface-2);
+  --color-border: var(--border);
+  --color-ink: var(--ink);
+  --color-ink-soft: var(--ink-soft);
+  --color-ink-mute: var(--ink-mute);
+  --color-brand: var(--brand);
+  --color-brand-ink: var(--brand-ink);
+  --color-brand-soft: var(--brand-soft);
+  --color-success: var(--success);
+  --color-success-soft: var(--success-soft);
+  --color-warn: var(--warn);
+  --color-warn-soft: var(--warn-soft);
+  --color-danger: var(--danger);
+  --color-danger-soft: var(--danger-soft);
+}
+
+html,
+body {
+  height: 100%;
+}
+
+body {
+  background: var(--bg);
+  color: var(--ink);
+  font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto,
+    "Helvetica Neue", Arial, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+/* Focus ring for a11y (WCAG 2.2 AA, PRD §A.3) */
+:where(button, a, input, [tabindex]):focus-visible {
+  outline: 2px solid var(--brand);
+  outline-offset: 2px;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+.spin {
+  animation: spin 0.9s linear infinite;
+}
+
+/* Ease used everywhere — no bounce/elastic per PRD §A.1 */
+* {
+  --ease: cubic-bezier(0.22, 0.61, 0.36, 1);
+}

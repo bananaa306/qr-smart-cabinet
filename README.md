@@ -1,0 +1,59 @@
+# QR Smart Cabinet & Inventory
+
+Mobile-first web app implementing the [PRD](./PRD-qr-smart-cabinet.md): scan a
+drawer's QR → verify → unlock → declare quantity → auto-relock → ledger updated.
+Built security-first — the client is a thin, untrusted surface; every unlock and
+inventory mutation is authorized, validated, rate-limited, and audited on the
+backend.
+
+## Stack
+- **Next.js 15 (App Router) + TypeScript + Tailwind v4**
+- In-memory data layer (`src/lib/store.ts`) standing in for PostgreSQL + Redis
+- Simulated lock controller (`src/lib/lock.ts`) for the ESP32/RPi handshake
+
+## Run
+
+```bash
+npm install
+npm run dev        # http://localhost:3000
+# or
+npm run build && npm run start
+```
+
+## Try it
+
+1. **Sign in.** Use `alex@example.com` (all drawers) or `sam@example.com`
+   (Cabinet A only). No self-registration. The OTP is shown on screen for the
+   demo (`devCode`); in production it's a passkey/one-time code sent to the device.
+2. **Scan.** The camera decodes QR on-device via `BarcodeDetector` where
+   available. Otherwise use manual short-code entry, or tap a demo drawer chip.
+3. **Take / return.** Set a quantity, "Unlock & take", watch the auto-relock
+   countdown, get a receipt. See **My activity** for your own ledger.
+
+Demo short codes: `A1-7Q4` (gloves), `A2-3K9` (drill bits, low stock),
+`B1-8M2` (cables), `B2-0X5` (disabled).
+
+## Screens (PRD §A.2)
+Sign-in · Scan · Drawer view · Countdown/open · Confirmation · My activity.
+
+## Security implemented (PRD §5)
+| Area | Where |
+|---|---|
+| Server-authoritative unlock + atomic stock/ledger write | `api/drawers/[id]/unlock` |
+| Append-only ledger, optimistic concurrency | `lib/store.ts`, unlock route |
+| Deny-by-default object-level authz (IDOR → 404, no leak) | `lib/security.ts` |
+| Rate limiting (auth, unlock, lookup, per-drawer cooldown) | `lib/security.ts` |
+| Idempotency keys (no double-decrement) | unlock route |
+| Single-use, signed, TTL'd, replay-rejected lock command | `lib/lock.ts` |
+| HttpOnly/Secure/SameSite session cookie; no tokens in JS storage | `lib/session.ts` |
+| Allowlisted-domain QR validation (rejects foreign URLs) | `lib/qr.ts` |
+| CSP, HSTS, frame-ancestors none, nosniff | `next.config.mjs` |
+| Anti-enumeration (opaque 128-bit ids, identical auth responses) | throughout |
+| Audit log of auth/unlock/denial/rate-limit/tamper events | `lib/store.ts` |
+
+## Not in this app (by design)
+No admin UI, no admin routes, no global inventory browsing, no other users' data,
+no export endpoints (PRD §5.3, §C.3). Real hardware, passkeys, PostgreSQL/Redis,
+and the separate admin console are production concerns beyond this demo.
+
+See [CLAUDE.md](./CLAUDE.md) for the repo constitution / hard rules.
