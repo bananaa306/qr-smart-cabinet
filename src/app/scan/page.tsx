@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { AppBar, BottomNav, Button, Callout } from "@/components/ui";
+import { AppBar, Button, Callout } from "@/components/ui";
 import { api } from "@/lib/client";
 import { parseScanned } from "@/lib/qr";
 
@@ -12,7 +12,7 @@ import { parseScanned } from "@/lib/qr";
 
 type CamState = "idle" | "starting" | "running" | "denied" | "unsupported";
 
-const DEMO_CODES = ["A1-7Q4", "A2-3K9", "B1-8M2", "B2-0X5"];
+const DEMO_CODES = ["A1-7Q4", "A3-8M2", "A5-2R1", "A7-9W3"];
 
 export default function ScanPage() {
   const router = useRouter();
@@ -93,23 +93,7 @@ export default function ScanPage() {
 
   return (
     <>
-      <AppBar
-        title="Scan a drawer"
-        right={
-          <button
-            aria-label="Sign out"
-            onClick={async () => {
-              await api("/api/auth/logout", { method: "POST" });
-              router.replace("/signin");
-            }}
-            className="grid h-11 w-11 place-items-center rounded-xl text-ink-soft hover:bg-surface-2"
-          >
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" aria-hidden>
-              <path d="M15 12H4m0 0l4-4m-4 4l4 4M14 4h4a2 2 0 012 2v12a2 2 0 01-2 2h-4" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-            </svg>
-          </button>
-        }
-      />
+      <AppBar title="Scan a drawer" back="/drawers" />
 
       <main className="flex flex-1 flex-col gap-5 px-5 py-5">
         {/* Viewfinder */}
@@ -199,8 +183,6 @@ export default function ScanPage() {
           </div>
         </div>
       </main>
-
-      <BottomNav active="scan" />
     </>
   );
 }

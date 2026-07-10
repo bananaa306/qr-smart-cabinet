@@ -3,5 +3,5 @@ import { currentUser } from "@/lib/session";
 
 export default async function Home() {
   const user = await currentUser();
-  redirect(user ? "/scan" : "/signin");
+  redirect(user ? "/drawers" : "/signin");
 }

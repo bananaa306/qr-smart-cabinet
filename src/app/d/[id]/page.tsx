@@ -118,7 +118,7 @@ export default function DrawerPage() {
   if (phase === "loading") {
     return (
       <>
-        <AppBar title="Drawer" back="/scan" />
+        <AppBar title="Drawer" back="/drawers" />
         <Spinner label="Checking your access…" />
       </>
     );
@@ -127,13 +127,13 @@ export default function DrawerPage() {
   if (phase === "gone") {
     return (
       <>
-        <AppBar title="Drawer" back="/scan" />
+        <AppBar title="Drawer" back="/drawers" />
         <main className="flex flex-1 flex-col justify-center gap-4 px-6">
           <Callout tone="danger" title="Drawer not available">
             This code doesn’t match a drawer you’re permitted to open. If you
             believe that’s wrong, contact your administrator.
           </Callout>
-          <Button onClick={() => router.replace("/scan")}>Back to scan</Button>
+          <Button onClick={() => router.replace("/drawers")}>Back to drawers</Button>
         </main>
       </>
     );
@@ -212,7 +212,7 @@ export default function DrawerPage() {
           </div>
 
           <div className="mt-auto flex flex-col gap-3">
-            <Button onClick={() => router.replace("/scan")}>Scan another drawer</Button>
+            <Button onClick={() => router.replace("/drawers")}>Back to drawers</Button>
             <Button variant="secondary" onClick={() => router.replace("/activity")}>
               View my activity
             </Button>
@@ -229,7 +229,7 @@ export default function DrawerPage() {
 
   return (
     <>
-      <AppBar title={`${drawer.cabinet} · ${drawer.label}`} back="/scan" />
+      <AppBar title={`${drawer.cabinet} · ${drawer.label}`} back="/drawers" />
       <main className="flex flex-1 flex-col gap-5 px-5 py-5">
         <div className="flex items-center gap-2 text-sm text-ink-mute">
           <LockBadge locked={drawer.locked} />

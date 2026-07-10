@@ -11,6 +11,7 @@ import {
 import { currentUser } from "@/lib/session";
 import { drawerView } from "@/lib/dto";
 import { deviceOpen, issueUnlockCommand } from "@/lib/lock";
+import { syncSheet } from "@/lib/sheets";
 import type { Intent, Transaction } from "@/lib/types";
 
 const RELOCK_SECONDS = 30; // auto-relock window (PRD §B.3 / open question #3)
@@ -168,6 +169,10 @@ export async function POST(
     createdAt: now,
   };
   db.transactions.push(tx); // append-only ledger (§C.1)
+
+  // Best-effort live sync to the Google Sheet (no-op unless configured). A sheet
+  // failure never affects the transaction — the app ledger is authoritative.
+  await syncSheet();
 
   // Mark physically open and schedule auto-relock (§B.3). Server has already
   // finalized the transaction with the declared quantity (§B.4).

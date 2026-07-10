@@ -50,7 +50,11 @@ export function setSessionCookie(token: string, maxAge: number) {
     name: SESSION_COOKIE,
     value: token,
     httpOnly: true,
-    secure: true,
+    // Secure in production only. Over plain http:// to a LAN IP (e.g. testing
+    // on a phone via http://192.168.x.x:3000) a browser silently drops a
+    // Secure cookie, breaking the session and looping back to sign-in.
+    // Production runs on HTTPS, so the Secure-cookie invariant still holds there.
+    secure: process.env.NODE_ENV === "production",
     sameSite: "strict" as const,
     path: "/",
     maxAge,

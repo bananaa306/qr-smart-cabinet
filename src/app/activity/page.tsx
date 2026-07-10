@@ -33,7 +33,7 @@ export default function ActivityPage() {
 
   return (
     <>
-      <AppBar title="My activity" back="/scan" />
+      <AppBar title="My activity" back="/drawers" />
       <main className="flex flex-1 flex-col px-5 py-5">
         {rows === null ? (
           <Spinner label="Loading your history…" />

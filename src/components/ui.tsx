@@ -105,10 +105,10 @@ export function Callout({
   );
 }
 
-export function BottomNav({ active }: { active: "scan" | "activity" }) {
+export function BottomNav({ active }: { active: "drawers" | "activity" }) {
   const router = useRouter();
   const item = (
-    key: "scan" | "activity",
+    key: "drawers" | "activity",
     href: string,
     label: string,
     icon: React.ReactNode,
@@ -127,11 +127,13 @@ export function BottomNav({ active }: { active: "scan" | "activity" }) {
   return (
     <nav className="sticky bottom-0 z-10 flex border-t border-border bg-surface/95 backdrop-blur">
       {item(
-        "scan",
-        "/scan",
-        "Scan",
+        "drawers",
+        "/drawers",
+        "Drawers",
         <svg width="22" height="22" viewBox="0 0 24 24" fill="none" aria-hidden>
-          <path d="M4 7V5a1 1 0 011-1h2M17 4h2a1 1 0 011 1v2M20 17v2a1 1 0 01-1 1h-2M7 20H5a1 1 0 01-1-1v-2M4 12h16" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+          <rect x="3" y="4" width="18" height="7" rx="1.5" stroke="currentColor" strokeWidth="2" />
+          <rect x="3" y="13" width="18" height="7" rx="1.5" stroke="currentColor" strokeWidth="2" />
+          <path d="M10 7.5h4M10 16.5h4" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
         </svg>,
       )}
       {item(
@@ -143,5 +145,23 @@ export function BottomNav({ active }: { active: "scan" | "activity" }) {
         </svg>,
       )}
     </nav>
+  );
+}
+
+// Floating QR-scan button, bottom-right (sits above the BottomNav). The scanner
+// is now a shortcut, not the home screen.
+export function ScanFab() {
+  const router = useRouter();
+  return (
+    <button
+      aria-label="Scan a QR code"
+      onClick={() => router.push("/scan")}
+      className="fixed bottom-20 right-5 z-20 grid h-16 w-16 place-items-center rounded-2xl bg-brand text-white shadow-lg shadow-brand/30 transition-transform active:scale-95"
+    >
+      <svg width="28" height="28" viewBox="0 0 24 24" fill="none" aria-hidden>
+        <path d="M4 8V5a1 1 0 011-1h3M16 4h3a1 1 0 011 1v3M20 16v3a1 1 0 01-1 1h-3M8 20H5a1 1 0 01-1-1v-3" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+        <rect x="8" y="8" width="8" height="8" rx="1" stroke="currentColor" strokeWidth="2" />
+      </svg>
+    </button>
   );
 }

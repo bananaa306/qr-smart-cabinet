@@ -12,6 +12,9 @@ export async function api<T = unknown>(
       ...(init?.headers ?? {}),
     },
     credentials: "same-origin",
+    // Never let the browser replay a cached auth/session response (would strand
+    // the app in a sign-in loop after logging in).
+    cache: "no-store",
   });
   let data: T;
   try {

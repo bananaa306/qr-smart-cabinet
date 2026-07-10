@@ -101,85 +101,49 @@ export function seed() {
   ];
   users.forEach((u) => db.users.set(u.id, u));
 
+  // Photos reuse a handful of known-good Unsplash URLs (allowed by the CSP
+  // img-src) so nothing renders broken.
+  const PHOTO = {
+    cable: "https://images.unsplash.com/photo-1601737487795-dab272f52420?w=400&q=60",
+    tool: "https://images.unsplash.com/photo-1504148455328-c376907d081c?w=400&q=60",
+    glove: "https://images.unsplash.com/photo-1583947215259-38e31be8751f?w=400&q=60",
+    battery: "https://images.unsplash.com/photo-1619641805634-b0ba0dd5f4d5?w=400&q=60",
+  };
+
   const items: Item[] = [
-    {
-      id: "it_gloves",
-      name: "Nitrile Gloves (M)",
-      unit: "pair",
-      minStock: 20,
-      photo:
-        "https://images.unsplash.com/photo-1583947215259-38e31be8751f?w=400&q=60",
-    },
-    {
-      id: "it_drill",
-      name: "Cordless Drill Bit Set",
-      unit: "set",
-      minStock: 3,
-      photo:
-        "https://images.unsplash.com/photo-1504148455328-c376907d081c?w=400&q=60",
-    },
-    {
-      id: "it_cable",
-      name: "Cat6 Patch Cable 1m",
-      unit: "cable",
-      minStock: 15,
-      photo:
-        "https://images.unsplash.com/photo-1601737487795-dab272f52420?w=400&q=60",
-    },
-    {
-      id: "it_battery",
-      name: "AA Batteries",
-      unit: "cell",
-      minStock: 40,
-      photo:
-        "https://images.unsplash.com/photo-1619641805634-b0ba0dd5f4d5?w=400&q=60",
-    },
+    { id: "it_cat6_1m", name: "Cat6 Patch Cable 1m", unit: "cable", minStock: 15, photo: PHOTO.cable },
+    { id: "it_cat6_3m", name: "Cat6 Patch Cable 3m", unit: "cable", minStock: 15, photo: PHOTO.cable },
+    { id: "it_hdmi", name: "HDMI Cable 2m", unit: "cable", minStock: 10, photo: PHOTO.cable },
+    { id: "it_usbc", name: "USB-C Cable 1m", unit: "cable", minStock: 12, photo: PHOTO.cable },
+    { id: "it_power", name: "Power Extension Lead", unit: "lead", minStock: 5, photo: PHOTO.battery },
+    { id: "it_fiber", name: "Fiber Patch Cable LC", unit: "cable", minStock: 8, photo: PHOTO.cable },
+    { id: "it_ties", name: "Cable Ties (100 pk)", unit: "pack", minStock: 6, photo: PHOTO.tool },
+    { id: "it_velcro", name: "Velcro Cable Straps", unit: "strap", minStock: 10, photo: PHOTO.glove },
+    { id: "it_rj45", name: "RJ45 Connectors", unit: "connector", minStock: 25, photo: PHOTO.tool },
   ];
   items.forEach((i) => db.items.set(i.id, i));
 
-  // Fixed opaque ids + friendly short codes so the demo is reproducible.
-  const drawers: Array<Drawer & { qty: number }> = [
-    {
-      id: "9f3ka1b2c3d4e5f60718293a4b5c6d7e",
-      shortCode: "A1-7Q4",
-      cabinet: "Cabinet A",
-      label: "Drawer 1",
-      location: "Workshop · North wall",
-      status: "active",
-      itemId: "it_gloves",
-      qty: 64,
-    },
-    {
-      id: "7b2c9d0e1f2a3b4c5d6e7f8091a2b3c4",
-      shortCode: "A2-3K9",
-      cabinet: "Cabinet A",
-      label: "Drawer 2",
-      location: "Workshop · North wall",
-      status: "active",
-      itemId: "it_drill",
-      qty: 6,
-    },
-    {
-      id: "3c4d5e6f70819a2b3c4d5e6f70819a2b",
-      shortCode: "B1-8M2",
-      cabinet: "Cabinet B",
-      label: "Drawer 1",
-      location: "Server room · Rack 4",
-      status: "active",
-      itemId: "it_cable",
-      qty: 22,
-    },
-    {
-      id: "1a2b3c4d5e6f708192a3b4c5d6e7f809",
-      shortCode: "B2-0X5",
-      cabinet: "Cabinet B",
-      label: "Drawer 2",
-      location: "Server room · Rack 4",
-      status: "disabled",
-      itemId: "it_battery",
-      qty: 0,
-    },
+  // Nine drawers in one cabinet — a 3×3 grid on the main menu. Fixed opaque ids
+  // + friendly short codes so the demo is reproducible. One drawer is left low,
+  // one empty, and one disabled to exercise every card state.
+  const drawerSeed: Array<
+    Pick<Drawer, "id" | "shortCode" | "label" | "itemId" | "status"> & { qty: number }
+  > = [
+    { id: "a1c0de00000000000000000000000001", shortCode: "A1-7Q4", label: "Drawer 1", itemId: "it_cat6_1m", status: "active", qty: 64 },
+    { id: "a1c0de00000000000000000000000002", shortCode: "A2-3K9", label: "Drawer 2", itemId: "it_cat6_3m", status: "active", qty: 30 },
+    { id: "a1c0de00000000000000000000000003", shortCode: "A3-8M2", label: "Drawer 3", itemId: "it_hdmi", status: "active", qty: 12 },
+    { id: "a1c0de00000000000000000000000004", shortCode: "A4-0X5", label: "Drawer 4", itemId: "it_usbc", status: "active", qty: 45 },
+    { id: "a1c0de00000000000000000000000005", shortCode: "A5-2R1", label: "Drawer 5", itemId: "it_power", status: "active", qty: 8 },
+    { id: "a1c0de00000000000000000000000006", shortCode: "A6-5T7", label: "Drawer 6", itemId: "it_fiber", status: "active", qty: 22 },
+    { id: "a1c0de00000000000000000000000007", shortCode: "A7-9W3", label: "Drawer 7", itemId: "it_ties", status: "active", qty: 3 },
+    { id: "a1c0de00000000000000000000000008", shortCode: "A8-1Y6", label: "Drawer 8", itemId: "it_velcro", status: "active", qty: 40 },
+    { id: "a1c0de00000000000000000000000009", shortCode: "A9-4Z8", label: "Drawer 9", itemId: "it_rj45", status: "disabled", qty: 0 },
   ];
+  const drawers: Array<Drawer & { qty: number }> = drawerSeed.map((d) => ({
+    ...d,
+    cabinet: "Cabinet A",
+    location: "Workshop · North wall",
+  }));
 
   drawers.forEach(({ qty, ...d }) => {
     db.drawers.set(d.id, d);
@@ -192,13 +156,7 @@ export function seed() {
     });
   });
 
-  // Permissions (deny-by-default). Alex: all four. Sam: only Cabinet A.
-  db.permissions.set(
-    "u_alex",
-    new Set(drawers.map((d) => d.id)),
-  );
-  db.permissions.set(
-    "u_sam",
-    new Set([drawers[0].id, drawers[1].id]),
-  );
+  // Permissions (deny-by-default). Alex (demo user): all nine. Sam: first four.
+  db.permissions.set("u_alex", new Set(drawers.map((d) => d.id)));
+  db.permissions.set("u_sam", new Set(drawers.slice(0, 4).map((d) => d.id)));
 }
