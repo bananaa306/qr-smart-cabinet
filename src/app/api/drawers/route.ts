@@ -4,7 +4,7 @@ import { db, seed } from "@/lib/store";
 import { canAccessDrawer } from "@/lib/security";
 import { currentUser } from "@/lib/session";
 import { drawerView } from "@/lib/dto";
-import { pullStockFromSheets, sheetsEnabled } from "@/lib/sheets";
+import { pullStockFromSheets, sheetsBackend, sheetsEnabled } from "@/lib/sheets";
 
 // GET /api/drawers — the main menu. Lists only the drawers this user is
 // permitted to open (deny-by-default, §5.2) with their live stock. No other
@@ -15,10 +15,10 @@ export async function GET() {
   const user = await currentUser();
   if (!user) return NextResponse.json({ error: "unauthenticated" }, { status: 401 });
 
-  // Never stall the menu on a cold Apps Script. Give a warm script ~1s;
-  // if it misses, serve current store data and finish the pull after the
-  // response (Fluid / Node) so the next paint / soft-refresh is correct.
-  const quick = await pullStockFromSheets({ timeoutMs: 1000 });
+  // Sheets API is usually sub-second; Apps Script cold starts are not.
+  // Brief wait, then background finish if needed.
+  const budget = sheetsBackend() === "api" ? 2500 : 1000;
+  const quick = await pullStockFromSheets({ timeoutMs: budget });
   if (!quick.ok && sheetsEnabled()) {
     after(() => {
       void pullStockFromSheets({ force: true, timeoutMs: 20000 });
@@ -34,5 +34,6 @@ export async function GET() {
     drawers,
     sheets: sheetsEnabled(),
     sheetsFresh: quick.ok,
+    sheetsBackend: sheetsBackend(),
   });
 }

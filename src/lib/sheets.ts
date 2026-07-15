@@ -1,17 +1,27 @@
 import { audit, db, seed } from "./store";
 import type { Drawer } from "./types";
+import {
+  apiAppendSessionRow,
+  apiReadInventory,
+  apiSetQuantity,
+  apiUpdateSessionRow,
+  sheetsApiConfigured,
+} from "./google-sheets-api";
 
 // ---------------------------------------------------------------------------
 // Google Sheets inventory + session tracker.
 //
-// The Apps Script Web App is the slow hop (cold starts ~5–15s). We mitigate by:
-//   • short in-process cache + in-flight dedupe
-//   • brief timeouts on menu reads (UI never waits for a cold script)
-//   • cron warmup hitting this same path to keep the script warm
+// Prefer the Google Sheets API (service account) when configured — typical
+// ~200–800ms. Fall back to the Apps Script Web App webhook otherwise
+// (cold starts often 5–15s).
 //
-// Config:
-//   SHEETS_WEBHOOK_URL   deployed Apps Script Web App /exec URL
-//   SHEETS_SECRET        shared secret checked by the script
+// API env:
+//   GOOGLE_SHEETS_SPREADSHEET_ID
+//   GOOGLE_SERVICE_ACCOUNT_EMAIL + GOOGLE_PRIVATE_KEY
+//   (or GOOGLE_SERVICE_ACCOUNT_JSON)
+//
+// Apps Script fallback:
+//   SHEETS_WEBHOOK_URL + SHEETS_SECRET
 // ---------------------------------------------------------------------------
 
 const WEBHOOK_URL = process.env.SHEETS_WEBHOOK_URL;
@@ -57,7 +67,7 @@ async function postToSheets(
   payload: Record<string, unknown>,
   opts?: { timeoutMs?: number },
 ): Promise<Response | null> {
-  if (!sheetsEnabled()) return null;
+  if (!WEBHOOK_URL || !SECRET) return null;
 
   try {
     const ctrl = new AbortController();
@@ -147,39 +157,94 @@ export async function logSessionRow(
   if (!sheetsEnabled()) return;
 
   const payload = {
-    secret: SECRET,
-    type: "session_row",
-    action,
-    row: {
-      name: row.name,
-      sessionId: row.sessionId,
-      actionLabel: row.action,
-      part: row.part,
-      shelf: row.shelf,
-      quantity: row.quantity,
-      locked: row.locked,
-      time: row.time ?? new Date().toISOString(),
-    },
+    name: row.name,
+    sessionId: row.sessionId,
+    actionLabel: row.action,
+    part: row.part,
+    shelf: row.shelf,
+    quantity: row.quantity,
+    locked: row.locked,
+    time: row.time ?? new Date().toISOString(),
   };
 
-  const ok = await postOk(payload);
-  if (!ok) {
+  try {
+    if (sheetsApiConfigured()) {
+      if (action === "update") await apiUpdateSessionRow(payload);
+      else await apiAppendSessionRow(payload);
+      audit({
+        type: "sheets.session_ok",
+        detail: `api ${action} ${row.action} ${row.sessionId}`,
+      });
+      return;
+    }
+
+    const ok = await postOk({
+      secret: SECRET,
+      type: "session_row",
+      action,
+      row: payload,
+    });
+    if (!ok) {
+      audit({
+        type: "sheets.session_error",
+        detail: `${action} ${row.action} ${row.sessionId}`,
+      });
+      return;
+    }
     audit({
-      type: "sheets.session_error",
+      type: "sheets.session_ok",
       detail: `${action} ${row.action} ${row.sessionId}`,
     });
-    return;
+  } catch (err) {
+    audit({
+      type: "sheets.session_error",
+      detail: `${action} ${row.action} ${String(err)}`,
+    });
   }
-  audit({
-    type: "sheets.session_ok",
-    detail: `${action} ${row.action} ${row.sessionId}`,
-  });
+}
+
+async function withTimeout<T>(promise: Promise<T>, timeoutMs?: number): Promise<T> {
+  if (!timeoutMs || timeoutMs <= 0) return promise;
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  try {
+    return await Promise.race([
+      promise,
+      new Promise<T>((_, reject) => {
+        timer = setTimeout(() => reject(new Error("timeout")), timeoutMs);
+      }),
+    ]);
+  } finally {
+    if (timer) clearTimeout(timer);
+  }
 }
 
 async function pullOnce(opts?: {
   force?: boolean;
   timeoutMs?: number;
 }): Promise<{ ok: boolean; error?: string; count?: number }> {
+  // Prefer Sheets API (fast). Fall back to Apps Script webhook.
+  if (sheetsApiConfigured()) {
+    try {
+      const rows = await withTimeout(apiReadInventory(), opts?.timeoutMs ?? 8000);
+      applySheetRowsToStore(rows);
+      lastPullAt = Date.now();
+      lastPullOk = true;
+      audit({ type: "sheets.pull_ok", detail: `api ${rows.length} drawers` });
+      return { ok: true, count: rows.length };
+    } catch (err) {
+      audit({ type: "sheets.pull_error", detail: `api_${String(err)}` });
+      lastPullOk = false;
+      // Fall through to Apps Script if configured.
+      if (!WEBHOOK_URL || !SECRET) {
+        return { ok: false, error: "api_failed" };
+      }
+    }
+  }
+
+  if (!WEBHOOK_URL || !SECRET) {
+    return { ok: false, error: "not_configured" };
+  }
+
   const res = await postToSheets(
     { secret: SECRET, type: "inventory" },
     { timeoutMs: opts?.timeoutMs },
@@ -320,20 +385,41 @@ export async function setSheetQuantity(
   if (!sheetsEnabled()) return false;
   const number = drawerNumber(drawer);
   if (!number) return false;
+  const qty = Math.max(0, Math.floor(quantity));
 
-  const ok = await postOk({
-    secret: SECRET,
-    type: "set_quantity",
-    number,
-    quantity: Math.max(0, Math.floor(quantity)),
-  });
-  if (!ok) {
-    audit({ type: "sheets.qty_error", drawerId: drawer.id, detail: String(quantity) });
+  try {
+    if (sheetsApiConfigured()) {
+      const updated = await apiSetQuantity(number, qty);
+      if (!updated) {
+        audit({ type: "sheets.qty_error", drawerId: drawer.id, detail: String(qty) });
+        return false;
+      }
+      invalidatePullCache();
+      audit({ type: "sheets.qty_ok", drawerId: drawer.id, detail: `api ${qty}` });
+      return true;
+    }
+
+    const ok = await postOk({
+      secret: SECRET,
+      type: "set_quantity",
+      number,
+      quantity: qty,
+    });
+    if (!ok) {
+      audit({ type: "sheets.qty_error", drawerId: drawer.id, detail: String(qty) });
+      return false;
+    }
+    invalidatePullCache();
+    audit({ type: "sheets.qty_ok", drawerId: drawer.id, detail: String(qty) });
+    return true;
+  } catch (err) {
+    audit({
+      type: "sheets.qty_error",
+      drawerId: drawer.id,
+      detail: String(err),
+    });
     return false;
   }
-  invalidatePullCache();
-  audit({ type: "sheets.qty_ok", drawerId: drawer.id, detail: String(quantity) });
-  return true;
 }
 
 /** Refresh from sheet (UI Sync button). Never pushes inventory rows. */
@@ -342,6 +428,7 @@ export async function syncSheet(): Promise<{
   error?: string;
   count?: number;
   parts?: string[];
+  backend?: "api" | "apps_script";
 }> {
   if (!sheetsEnabled()) return { ok: false, error: "not_configured" };
   const result = await pullStockFromSheets({ force: true, timeoutMs: 20000 });
@@ -354,11 +441,22 @@ export async function syncSheet(): Promise<{
       return `${d.label}: ${item?.name ?? "?"}`;
     });
 
-  return { ok: true, count: result.count ?? parts.length, parts };
+  return {
+    ok: true,
+    count: result.count ?? parts.length,
+    parts,
+    backend: sheetsApiConfigured() ? "api" : "apps_script",
+  };
 }
 
 export function sheetsEnabled(): boolean {
-  return Boolean(WEBHOOK_URL && SECRET);
+  return sheetsApiConfigured() || Boolean(WEBHOOK_URL && SECRET);
+}
+
+export function sheetsBackend(): "api" | "apps_script" | "none" {
+  if (sheetsApiConfigured()) return "api";
+  if (WEBHOOK_URL && SECRET) return "apps_script";
+  return "none";
 }
 
 export function sheetsCacheAgeMs(): number | null {

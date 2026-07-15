@@ -1,22 +1,56 @@
 # Google Sheets as inventory source
 
-When `SHEETS_WEBHOOK_URL` and `SHEETS_SECRET` are set, the **inventory sheet
-owns Part, Quantity, and Is Locked**. The app reads those columns before showing
-drawers and before take/return. It never rewrites Part or Locked from seeded
-app data.
+When Sheets is configured, the **inventory sheet owns Part, Quantity, and Is
+Locked**. The app reads those columns before showing drawers and before
+take/return. It never rewrites Part or Locked from seeded app data.
 
 Take/return **only** patch the Quantity cell for that drawer. Session tracker
 rows are append-only (separate sheet).
 
-## One-time setup (~5 minutes)
+## Recommended: Google Sheets API (fast)
 
-1. **Open your spreadsheet** →
-   `https://docs.google.com/spreadsheets/d/1rhm8XpNQIIIrtaBwIB6tTSrOwbP3zScRpPm-DGeni_U/edit`
-2. **Extensions → Apps Script.** Paste
-   [`google-apps-script/Code.gs`](../google-apps-script/Code.gs). Save.
-3. **Script property** `SECRET` = a long random string.
-4. **Deploy → New deployment** (Web app, Execute as Me, Anyone) → copy `/exec` URL.
-5. **Env** (local + Vercel):
+Typical latency **~200–800ms**. Avoids Apps Script Web App cold starts.
+
+1. Open [Google Cloud Console](https://console.cloud.google.com/) → create or
+   pick a project.
+2. **APIs & Services → Enable APIs** → enable **Google Sheets API**.
+3. **IAM & Admin → Service Accounts → Create**:
+   - Name e.g. `qr-smart-cabinet`
+   - Create key → **JSON** → download the file.
+4. Open your spreadsheet and **Share** it with the service account email
+   (`…@….iam.gserviceaccount.com`) as **Editor**.
+5. Env (local `.env.local` + Vercel):
+
+   ```bash
+   GOOGLE_SHEETS_SPREADSHEET_ID=1rhm8XpNQIIIrtaBwIB6tTSrOwbP3zScRpPm-DGeni_U
+   GOOGLE_SERVICE_ACCOUNT_EMAIL=your-sa@your-project.iam.gserviceaccount.com
+   GOOGLE_PRIVATE_KEY="-----BEGIN PRIVATE KEY-----\n...\n-----END PRIVATE KEY-----\n"
+   ```
+
+   Or one JSON blob (easier for Vercel):
+
+   ```bash
+   GOOGLE_SHEETS_SPREADSHEET_ID=1rhm8XpNQIIIrtaBwIB6tTSrOwbP3zScRpPm-DGeni_U
+   GOOGLE_SERVICE_ACCOUNT_JSON={"type":"service_account","client_email":"...","private_key":"-----BEGIN PRIVATE KEY-----\n...\n-----END PRIVATE KEY-----\n",...}
+   ```
+
+   Paste the private key with literal `\n` newlines (or the full downloaded JSON
+   on one line). **Never commit** the key / JSON.
+
+6. Restart `npm run dev` / redeploy. Sync bar should say
+   **Following Google Sheet (API)**.
+
+Spreadsheet ID is the long id in the sheet URL between `/d/` and `/edit`.
+
+## Fallback: Apps Script webhook (slower)
+
+Still supported if API env is unset.
+
+1. Spreadsheet → Extensions → Apps Script → paste
+   [`google-apps-script/Code.gs`](../google-apps-script/Code.gs).
+2. Script property `SECRET` = long random string.
+3. Deploy → Web app (Execute as Me, Anyone) → copy `/exec` URL.
+4. Env:
 
    ```bash
    SHEETS_WEBHOOK_URL=https://script.google.com/macros/s/AKfyc.../exec
@@ -24,7 +58,7 @@ rows are append-only (separate sheet).
    SESSION_SECRET=another-long-random-string
    ```
 
-6. Redeploy Apps Script with **New version** after any `Code.gs` change.
+When **both** are set, the app uses the **API first**.
 
 ## Sheet layout
 
@@ -42,30 +76,17 @@ Drawer numbers must match app labels (`Drawer 1` → `1`).
 
 ## Behavior
 
-- **Read:** `inventory` → fills the UI from the sheet.
-- **Take/return:** `set_quantity` → updates that row’s Quantity only.
-- **Refresh button:** pulls from the sheet again (does not push inventory).
+- **Read:** inventory → fills the UI from the sheet.
+- **Take/return:** patches Quantity only.
+- **Refresh:** force-pulls from the sheet (does not push inventory).
 - **Lock/unlock:** session log only; Is Locked stays sheet-owned until you change it in Sheets.
-- Full `snapshot` overwrites are disabled.
 
-## Architecture note
+## Latency notes
 
-Sheets is fine as shared workshop inventory. It is not a transactional DB. For
-strong concurrency, use PostgreSQL later and keep Sheets as ops UI.
+- **Sheets API** is the durable fix for slow loads.
+- Apps Script path still uses cache, short menu timeouts, background finish, and
+  `/api/sheets/warmup` cron (every 5 min on Pro plans).
+- Optional: `CRON_SECRET` to protect the warmup route.
 
-### Latency
-
-The Apps Script **Web App** cold-starts slowly (often 5–15s). The app mitigates this:
-
-1. **Menu load** waits ≤1s for Sheets, then returns immediately and finishes the
-   pull in the background; the drawers page soft-refreshes once after ~2s.
-2. **In-flight dedupe + 30s cache** so concurrent requests don’t pile on.
-3. **Cron warmup** (`/api/sheets/warmup` every 5 minutes via `vercel.json`) pings
-   Apps Script so it stays warm during workshop hours.
-
-Optional: set `CRON_SECRET` in Vercel and Vercel will send it automatically on
-cron invocations.
-
-For near–real-time reads without Apps Script delay, switch later to the
-**Google Sheets API** with a service account (typical ~200–500ms). That needs
-service-account JSON in Vercel env and sheet sharing with the SA email.
+Sheets is fine as shared workshop inventory. For strong concurrency later, use
+PostgreSQL and keep Sheets as ops UI.

@@ -124,6 +124,9 @@ function DrawersPageInner() {
   const openParam = searchParams.get("open");
   const [drawers, setDrawers] = useState<DrawerView[] | null>(null);
   const [sheets, setSheets] = useState(false);
+  const [sheetsBackend, setSheetsBackend] = useState<"api" | "apps_script" | "none">(
+    "none",
+  );
   const [sessionName, setSessionName] = useState<string | null>(null);
   const [openIdx, setOpenIdx] = useState<number | null>(null);
   const [detailIdx, setDetailIdx] = useState<number | null>(null);
@@ -139,6 +142,7 @@ function DrawersPageInner() {
       drawers: DrawerView[];
       sheets: boolean;
       sheetsFresh?: boolean;
+      sheetsBackend?: "api" | "apps_script" | "none";
     }>("/api/drawers");
     if (status === 401) {
       router.replace("/signin");
@@ -150,6 +154,7 @@ function DrawersPageInner() {
     }
     setDrawers(data.drawers);
     setSheets(data.sheets);
+    if (data.sheetsBackend) setSheetsBackend(data.sheetsBackend);
     return data.drawers;
   }
 
@@ -288,6 +293,7 @@ function DrawersPageInner() {
 
           <SyncBar
             connected={sheets}
+            backend={sheetsBackend}
             accent={accent}
             onRefreshed={(next) => setDrawers(next)}
             reload={loadCabinet}
@@ -334,11 +340,13 @@ function DrawersPageInner() {
 
 function SyncBar({
   connected,
+  backend,
   accent,
   onRefreshed,
   reload,
 }: {
   connected: boolean;
+  backend: "api" | "apps_script" | "none";
   accent: string;
   onRefreshed: (drawers: DrawerView[]) => void;
   reload: () => Promise<DrawerView[] | null>;
@@ -355,6 +363,7 @@ function SyncBar({
         error?: string;
         count?: number;
         parts?: string[];
+        backend?: "api" | "apps_script";
       }>("/api/sheets/sync", { method: "POST" });
 
       const next = await reload();
@@ -378,15 +387,18 @@ function SyncBar({
                 ? "Old Apps Script — paste Code.gs + New version deploy"
                 : err.startsWith("http_") || err === "fetch_failed"
                   ? "Can’t reach Apps Script — check /exec URL"
-                  : `Sheet pull failed (${err})`,
+                  : err === "api_failed"
+                    ? "Sheets API failed — check SA email share + keys"
+                    : `Sheet pull failed (${err})`,
         );
       } else {
         setState("ok");
+        const via = sync.data.backend === "api" ? "API" : "Apps Script";
         const sample = sync.data.parts?.find((p) => /wasd|3dwada/i.test(p));
         setHint(
           sample
-            ? `Sheet OK · ${sample}`
-            : `Sheet OK · ${sync.data.count ?? next.length} drawers`,
+            ? `${via} OK · ${sample}`
+            : `${via} OK · ${sync.data.count ?? next.length} drawers`,
         );
       }
     } catch {
@@ -399,6 +411,13 @@ function SyncBar({
     }, 3200);
   }
 
+  const idleLabel =
+    !connected
+      ? "Local inventory"
+      : backend === "api"
+        ? "Following Google Sheet (API)"
+        : "Following Google Sheet";
+
   return (
     <div className="smart-sync">
       <div
@@ -406,11 +425,7 @@ function SyncBar({
         style={{ background: connected ? "#3E8E5A" : "var(--smart-sub)" }}
       />
       <div className="min-w-0 flex-1 truncate">
-        {hint
-          ? hint
-          : connected
-            ? "Following Google Sheet"
-            : "Local inventory"}
+        {hint ? hint : idleLabel}
       </div>
       <button onClick={syncNow} disabled={state === "syncing"} style={{ background: accent }}>
         {state === "syncing"
