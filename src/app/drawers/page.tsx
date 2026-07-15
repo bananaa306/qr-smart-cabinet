@@ -39,7 +39,6 @@ interface TxResult {
   drawer: DrawerView;
 }
 
-const BLUE = "#1F5FA8";
 const INK = "#1C2B4A";
 
 const themes: Record<ThemeName, ThemeTokens> = {
@@ -519,6 +518,7 @@ function DrawerRow({
   const status = drawer.quantity === 0 ? "empty" : drawer.quantity <= 5 ? "low" : "ok";
   const empty = status === "empty";
   const unit = pluralUnit(drawer.item.unit, drawer.quantity);
+  const stock = stockMeter(drawer.quantity);
 
   return (
     <div className="smart-drawer-row">
@@ -556,12 +556,13 @@ function DrawerRow({
           <div className="smart-scoop" />
           <div className="smart-front-top">
             <span>DRAWER {index + 1}</span>
-            <i
-              style={{
-                background: status === "ok" ? BLUE : status === "low" ? accent : "transparent",
-                border: empty ? "1.5px solid #C9BFA9" : "none",
-              }}
-            />
+            <span
+              className="smart-stock-bar"
+              title={`${drawer.quantity} in stock`}
+              aria-hidden
+            >
+              <i style={{ width: `${stock.pct}%`, background: stock.color }} />
+            </span>
           </div>
           <div className="smart-front-bottom">
             <span style={{ color: empty ? "#A89F8C" : "#4A4436" }}>
@@ -978,4 +979,15 @@ function pluralUnit(unit: string, quantity: number) {
   if (unit === "lead") return "leads";
   if (unit === "cable") return "cables";
   return `${unit}s`;
+}
+
+/** Fill meter vs a soft full line (no capacity column in the sheet). */
+const STOCK_BAR_FULL = 40;
+
+function stockMeter(quantity: number): { pct: number; color: string } {
+  const pct = Math.max(0, Math.min(100, Math.round((quantity / STOCK_BAR_FULL) * 100)));
+  if (pct <= 0) return { pct: 0, color: "transparent" };
+  if (pct >= 50) return { pct, color: "#3E8E5A" }; // healthy
+  if (pct >= 20) return { pct, color: "#C4A035" }; // mid
+  return { pct, color: "#CF2233" }; // low
 }
