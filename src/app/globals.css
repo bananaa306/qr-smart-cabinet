@@ -1378,11 +1378,11 @@ body.smart-root {
   justify-content: center;
   min-height: 28px;
   margin-top: 2px;
-  border: 1px solid color-mix(in srgb, var(--smart-accent) 55%, var(--smart-panel-border));
+  border: 1px solid #a81c2a;
   border-radius: 999px;
-  padding: 0 10px;
-  background: color-mix(in srgb, var(--smart-accent) 14%, transparent);
-  color: var(--smart-ink);
+  padding: 0 12px;
+  background: #cf2233;
+  color: #fffdf8;
   font-size: 11px;
   font-weight: 700;
   letter-spacing: 0.02em;
@@ -1391,7 +1391,7 @@ body.smart-root {
 }
 
 .smart-sign-out:hover:not(:disabled) {
-  background: color-mix(in srgb, var(--smart-accent) 28%, transparent);
+  background: #b81e2d;
 }
 
 .smart-sign-out:disabled {
