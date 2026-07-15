@@ -60,8 +60,10 @@ The Apps Script **Web App** cold-starts slowly (often 5–15s). The app mitigate
 1. **Menu load** waits ≤1s for Sheets, then returns immediately and finishes the
    pull in the background; the drawers page soft-refreshes once after ~2s.
 2. **In-flight dedupe + 30s cache** so concurrent requests don’t pile on.
-3. **Cron warmup** (`/api/sheets/warmup` every 5 minutes via `vercel.json`) pings
-   Apps Script so it stays warm during workshop hours.
+3. **Cron warmup** (`/api/sheets/warmup` once daily via `vercel.json`) pings
+   Apps Script so it has a chance to stay warm. On **Vercel Pro** you can change
+   the schedule to `*/5 * * * *` for every-5-minute warming (Hobby only allows
+   daily crons — more frequent schedules fail the deploy).
 
 Optional: set `CRON_SECRET` in Vercel and Vercel will send it automatically on
 cron invocations.
