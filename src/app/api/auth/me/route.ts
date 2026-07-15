@@ -1,12 +1,17 @@
 import { NextResponse } from "next/server";
 import { seed } from "@/lib/store";
-import { currentUser } from "@/lib/session";
+import { currentSession } from "@/lib/session";
 
 export async function GET() {
   seed();
-  const user = await currentUser();
-  if (!user) return NextResponse.json({ user: null }, { status: 401 });
+  const session = await currentSession();
+  if (!session) return NextResponse.json({ user: null }, { status: 401 });
   return NextResponse.json({
-    user: { id: user.id, name: user.name, email: user.email },
+    user: {
+      id: session.user.id,
+      name: session.displayName,
+      email: session.user.email,
+      trackerSessionId: session.trackerSessionId ?? null,
+    },
   });
 }

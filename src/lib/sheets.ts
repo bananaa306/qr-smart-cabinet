@@ -16,9 +16,87 @@ import type { Drawer, StockLevel, Transaction, User } from "./types";
 const WEBHOOK_URL = process.env.SHEETS_WEBHOOK_URL;
 const SECRET = process.env.SHEETS_SECRET;
 
-export function sheetsEnabled(): boolean {
-  return Boolean(WEBHOOK_URL && SECRET);
+export type SessionAction =
+  | "Lock"
+  | "Unlock"
+  | "Take"
+  | "Return"
+  | "Take + Lock"
+  | "Return + Lock"
+  | "Unlock + Take"
+  | "Unlock + Return";
+
+export interface SessionRow {
+  name: string;
+  sessionId: string;
+  action: SessionAction;
+  part: string;
+  shelf: string;
+  quantity: number;
+  locked: boolean;
+  /** ISO timestamp; defaults to now when logging. */
+  time?: string;
 }
+
+async function postToSheets(payload: Record<string, unknown>): Promise<boolean> {
+  if (!sheetsEnabled()) return false;
+
+  try {
+    const ctrl = new AbortController();
+    const timer = setTimeout(() => ctrl.abort(), 4000);
+    const res = await fetch(WEBHOOK_URL!, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+      signal: ctrl.signal,
+      redirect: "follow",
+    });
+    clearTimeout(timer);
+    return res.ok;
+  } catch {
+    return false;
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Session tracker: Name | Time | Session ID | Action | Part | Shelf | Quantity | Locked?
+// ---------------------------------------------------------------------------
+export async function logSessionRow(
+  row: SessionRow,
+  action: "append" | "update" = "append",
+): Promise<void> {
+  if (!sheetsEnabled()) return;
+
+  const payload = {
+    secret: SECRET,
+    type: "session_row",
+    action,
+    row: {
+      name: row.name,
+      sessionId: row.sessionId,
+      actionLabel: row.action,
+      part: row.part,
+      shelf: row.shelf,
+      quantity: row.quantity,
+      locked: row.locked,
+      time: row.time ?? new Date().toISOString(),
+    },
+  };
+
+  const ok = await postToSheets(payload);
+  if (!ok) {
+    audit({
+      type: "sheets.session_error",
+      detail: `${action} ${row.action} ${row.sessionId}`,
+    });
+    return;
+  }
+  audit({
+    type: "sheets.session_ok",
+    detail: `${action} ${row.action} ${row.sessionId}`,
+  });
+}
+
 
 // ---------------------------------------------------------------------------
 // Live snapshot sync. Pushes the CURRENT state of every drawer (part, quantity,
@@ -68,6 +146,10 @@ export async function syncSheet(): Promise<{ ok: boolean; error?: string }> {
     audit({ type: "sheets.sync_error", detail: String(err) });
     return { ok: false, error: String(err) };
   }
+}
+
+export function sheetsEnabled(): boolean {
+  return Boolean(WEBHOOK_URL && SECRET);
 }
 
 export async function mirrorTransaction(

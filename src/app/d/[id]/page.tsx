@@ -7,13 +7,11 @@ import { api, uuid } from "@/lib/client";
 import type { DrawerView } from "@/lib/dto";
 
 type Intent = "take" | "return";
-type Phase = "loading" | "view" | "unlocking" | "open" | "done" | "gone";
+type Phase = "loading" | "view" | "working" | "done" | "gone";
 
-interface UnlockResult {
+interface TxResult {
   transaction: { id: string; delta: number; intent: Intent; balanceAfter: number; createdAt: number };
   drawer: DrawerView;
-  relockAt: number;
-  relockSeconds: number;
 }
 
 export default function DrawerPage() {
@@ -26,9 +24,10 @@ export default function DrawerPage() {
   const [qty, setQty] = useState(1);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
-  const [result, setResult] = useState<UnlockResult | null>(null);
-  const [remaining, setRemaining] = useState(0);
+  const [result, setResult] = useState<TxResult | null>(null);
+  const [lockWorking, setLockWorking] = useState(false);
   const idemKey = useRef<string>(uuid());
+  const lockIdemKey = useRef<string>(uuid());
 
   const load = useCallback(async () => {
     const { ok, status, data } = await api<{ drawer: DrawerView }>(
@@ -48,19 +47,6 @@ export default function DrawerPage() {
     load();
   }, [load]);
 
-  // Countdown while the drawer is physically open.
-  useEffect(() => {
-    if (phase !== "open" || !result) return;
-    const tick = () => {
-      const left = Math.max(0, Math.ceil((result.relockAt - Date.now()) / 1000));
-      setRemaining(left);
-      if (left <= 0) setPhase("done");
-    };
-    tick();
-    const iv = setInterval(tick, 250);
-    return () => clearInterval(iv);
-  }, [phase, result]);
-
   const maxQty = drawer
     ? intent === "take"
       ? Math.max(1, drawer.quantity)
@@ -68,12 +54,40 @@ export default function DrawerPage() {
     : 1;
   const clampedQty = Math.min(Math.max(qty, 1), maxQty);
 
-  async function unlock() {
+  async function toggleLock() {
     if (!drawer) return;
-    setPhase("unlocking");
+    setLockWorking(true);
     setError(null);
-    const { ok, status, data } = await api<UnlockResult & { error?: string; drawer?: DrawerView }>(
-      `/api/drawers/${encodeURIComponent(id)}/unlock`,
+    const locked = drawer.locked;
+    const path = locked
+      ? `/api/drawers/${encodeURIComponent(id)}/unlock`
+      : `/api/drawers/${encodeURIComponent(id)}/lock`;
+    const { ok, status, data } = await api<{
+      error?: string;
+      drawer?: DrawerView;
+    }>(path, {
+      method: "POST",
+      body: locked
+        ? JSON.stringify({ idempotencyKey: lockIdemKey.current })
+        : JSON.stringify({}),
+    });
+    setLockWorking(false);
+    lockIdemKey.current = uuid();
+    if (status === 401) return router.replace("/signin");
+    if (ok && data.drawer) {
+      setDrawer(data.drawer);
+      return;
+    }
+    if (data.drawer) setDrawer(data.drawer);
+    setError(locked ? "Couldn’t unlock. Please try again." : "Couldn’t lock. Please try again.");
+  }
+
+  async function confirm() {
+    if (!drawer) return;
+    setPhase("working");
+    setError(null);
+    const { ok, status, data } = await api<TxResult & { error?: string; drawer?: DrawerView }>(
+      `/api/drawers/${encodeURIComponent(id)}/transaction`,
       {
         method: "POST",
         body: JSON.stringify({
@@ -88,11 +102,10 @@ export default function DrawerPage() {
     if (ok) {
       setResult(data);
       setDrawer(data.drawer);
-      setPhase("open");
+      setPhase("done");
       return;
     }
 
-    // Fresh idempotency key for the next distinct attempt.
     idemKey.current = uuid();
     setPhase("view");
     if (status === 401) return router.replace("/signin");
@@ -100,21 +113,12 @@ export default function DrawerPage() {
     const messages: Record<string, string> = {
       stock_changed: "Stock changed while you were deciding. Re-check the count and confirm.",
       insufficient_stock: "Not enough in the drawer for that quantity.",
-      drawer_busy: "Someone else has this drawer open right now. Try again shortly.",
-      cooldown: "This drawer just closed — give it a moment before reopening.",
-      rate_limited: "You’ve hit the unlock limit for now. Try again later.",
+      rate_limited: "You’ve hit the limit for now. Try again later.",
       drawer_disabled: "This drawer is disabled.",
-      lock_error: "The lock didn’t respond. Nothing was taken — please retry.",
     };
-    setError(messages[data.error ?? ""] ?? "Couldn’t unlock. Please try again.");
+    setError(messages[data.error ?? ""] ?? "Couldn’t record that. Please try again.");
   }
 
-  async function lockNow() {
-    await api(`/api/drawers/${encodeURIComponent(id)}/lock`, { method: "POST" });
-    setPhase("done");
-  }
-
-  // ---- render ----
   if (phase === "loading") {
     return (
       <>
@@ -141,48 +145,6 @@ export default function DrawerPage() {
 
   if (!drawer) return null;
 
-  if (phase === "open" && result) {
-    const pct = Math.max(0, Math.min(1, remaining / result.relockSeconds));
-    return (
-      <>
-        <AppBar title="Drawer open" />
-        <main className="flex flex-1 flex-col items-center justify-center gap-8 px-6 text-center">
-          <div className="relative grid h-44 w-44 place-items-center">
-            <svg className="absolute inset-0 -rotate-90" viewBox="0 0 100 100" aria-hidden>
-              <circle cx="50" cy="50" r="45" fill="none" stroke="var(--surface-2)" strokeWidth="8" />
-              <circle
-                cx="50" cy="50" r="45" fill="none"
-                stroke="var(--success)" strokeWidth="8" strokeLinecap="round"
-                strokeDasharray={2 * Math.PI * 45}
-                strokeDashoffset={2 * Math.PI * 45 * (1 - pct)}
-                style={{ transition: "stroke-dashoffset 250ms linear" }}
-              />
-            </svg>
-            <div>
-              <div className="text-5xl font-bold text-success tabular-nums">{remaining}</div>
-              <div className="text-xs font-medium uppercase tracking-wide text-ink-mute">seconds</div>
-            </div>
-          </div>
-
-          <div>
-            <p className="text-lg font-semibold text-success">Unlocked — go ahead</p>
-            <p className="mt-1 text-sm text-ink-soft">
-              {intent === "take" ? "Taking" : "Returning"}{" "}
-              <span className="font-semibold text-ink">{result.transaction.delta > 0 ? "+" : ""}{result.transaction.delta}</span>{" "}
-              {drawer.item.unit}
-              {Math.abs(result.transaction.delta) !== 1 ? "s" : ""} · {drawer.item.name}
-            </p>
-            <p className="mt-1 text-sm text-ink-mute">Auto-relocks when the timer ends.</p>
-          </div>
-
-          <div className="w-full">
-            <Button variant="primary" onClick={lockNow}>Done — lock now</Button>
-          </div>
-        </main>
-      </>
-    );
-  }
-
   if (phase === "done" && result) {
     const took = result.transaction.intent === "take";
     return (
@@ -195,7 +157,7 @@ export default function DrawerPage() {
                 <path d="M20 6L9 17l-5-5" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" />
               </svg>
             </div>
-            <h2 className="mt-3 text-xl font-bold">Locked & recorded</h2>
+            <h2 className="mt-3 text-xl font-bold">Recorded</h2>
             <p className="mt-1 text-sm text-ink-mute">
               {new Date(result.transaction.createdAt).toLocaleString()}
             </p>
@@ -222,7 +184,6 @@ export default function DrawerPage() {
     );
   }
 
-  // ---- default: drawer view (screen 3) ----
   const disabled = drawer.status === "disabled";
   const empty = drawer.quantity === 0;
   const lowStock = drawer.quantity > 0 && drawer.quantity <= 5;
@@ -269,7 +230,20 @@ export default function DrawerPage() {
         {error && <Callout tone="danger">{error}</Callout>}
         {notice && <Callout tone="info">{notice}</Callout>}
 
-        {/* Intent toggle */}
+        <Button
+          onClick={toggleLock}
+          disabled={disabled || lockWorking}
+          variant={drawer.locked ? "primary" : "secondary"}
+        >
+          {lockWorking
+            ? drawer.locked
+              ? "Unlocking…"
+              : "Locking…"
+            : drawer.locked
+              ? "Unlock drawer"
+              : "Lock drawer"}
+        </Button>
+
         <div className="grid grid-cols-2 gap-2 rounded-2xl bg-surface-2 p-1">
           {(["take", "return"] as Intent[]).map((it) => (
             <button
@@ -289,7 +263,6 @@ export default function DrawerPage() {
           ))}
         </div>
 
-        {/* Quantity stepper — clamped client-side, re-validated server-side */}
         <div className="flex items-center justify-between rounded-2xl border border-border bg-surface px-3 py-3">
           <StepBtn label="Decrease" disabled={clampedQty <= 1} onClick={() => setQty((q) => Math.max(1, q - 1))}>−</StepBtn>
           <div className="text-center">
@@ -304,19 +277,19 @@ export default function DrawerPage() {
 
         <div className="mt-auto">
           <Button
-            onClick={unlock}
-            disabled={disabled || phase === "unlocking" || (intent === "take" && empty)}
+            onClick={confirm}
+            disabled={disabled || phase === "working" || (intent === "take" && empty)}
             variant={intent === "take" ? "primary" : "secondary"}
           >
-            {phase === "unlocking" ? (
+            {phase === "working" ? (
               <>
                 <span className="spin h-4 w-4 rounded-full border-2 border-white/40 border-t-white" />
-                Unlocking…
+                Saving…
               </>
             ) : intent === "take" ? (
-              `Unlock & take ${clampedQty}`
+              `Take ${clampedQty}`
             ) : (
-              `Unlock & return ${clampedQty}`
+              `Return ${clampedQty}`
             )}
           </Button>
         </div>

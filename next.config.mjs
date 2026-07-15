@@ -14,18 +14,20 @@ const nextConfig = {
       scriptSrc,
       "style-src 'self' 'unsafe-inline'",
       "img-src 'self' data: blob: https://images.unsplash.com",
-      "connect-src 'self'",
-      "frame-ancestors 'none'",
+      isProd ? "connect-src 'self'" : "connect-src 'self' ws: wss: http: https:",
+      isProd ? "frame-ancestors 'none'" : "frame-ancestors *",
       "base-uri 'self'",
       "form-action 'self'",
     ].join("; ");
     const headers = [
       { key: "Content-Security-Policy", value: csp },
       { key: "X-Content-Type-Options", value: "nosniff" },
-      { key: "X-Frame-Options", value: "DENY" },
       { key: "Referrer-Policy", value: "strict-origin-when-cross-origin" },
       { key: "Permissions-Policy", value: "camera=(self), microphone=()" },
     ];
+    if (isProd) {
+      headers.push({ key: "X-Frame-Options", value: "DENY" });
+    }
     // HSTS forces https for the whole host for 2 years and is browser-cached.
     // On http://localhost that permanently breaks local dev, so only send it
     // in production (which is served over HTTPS). PRD §5.2 invariant holds there.

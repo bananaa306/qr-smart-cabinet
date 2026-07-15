@@ -1,18 +1,23 @@
 import { NextResponse } from "next/server";
 import { audit, db, seed } from "@/lib/store";
 import { LIMITS, canAccessDrawer } from "@/lib/security";
-import { currentUser } from "@/lib/session";
+import { currentSession } from "@/lib/session";
+import { drawerView } from "@/lib/dto";
+import { logSessionRow, syncSheet } from "@/lib/sheets";
 
-// POST /api/drawers/{id}/lock — "Done — lock now" (PRD §A.2 screen 4).
-// Only the user who holds the current open session may relock early.
+// POST /api/drawers/{id}/lock — physical lock (no stock mutation).
 export async function POST(
-  req: Request,
+  _req: Request,
   { params }: { params: Promise<{ id: string }> },
 ) {
   seed();
   const { id: raw } = await params;
-  const user = await currentUser();
-  if (!user) return NextResponse.json({ error: "unauthenticated" }, { status: 401 });
+  const visit = await currentSession();
+  if (!visit) return NextResponse.json({ error: "unauthenticated" }, { status: 401 });
+  const user = visit.user;
+  if (!visit.trackerSessionId) {
+    return NextResponse.json({ error: "unauthenticated" }, { status: 401 });
+  }
 
   const key = decodeURIComponent(raw).trim();
   const drawerId =
@@ -22,17 +27,43 @@ export async function POST(
     return NextResponse.json({ error: "not_found" }, { status: 404 });
   }
 
+  const stock = db.stock.get(drawer.id)!;
+  const item = db.items.get(drawer.itemId);
+  const partName = item?.name ?? drawer.itemId;
   const openSessionId = db.openDrawer.get(drawer.id);
-  const session = openSessionId ? db.unlockSessions.get(openSessionId) : undefined;
-  if (!session || session.userId !== user.id) {
+  if (!openSessionId) {
+    return NextResponse.json({ ok: true, locked: true, drawer: drawerView(drawer, stock) });
+  }
+
+  const unlockSession = db.unlockSessions.get(openSessionId);
+  if (unlockSession && unlockSession.userId !== user.id) {
     return NextResponse.json({ error: "not_open" }, { status: 409 });
   }
 
   db.openDrawer.delete(drawer.id);
   db.drawerCooldown.set(drawer.id, Date.now() + LIMITS.drawerCooldownMs);
-  session.closedAt = Date.now();
-  session.outcome = "closed";
+  if (unlockSession) {
+    unlockSession.closedAt = Date.now();
+    unlockSession.outcome = "closed";
+  }
   audit({ type: "lock.relocked_by_user", userId: user.id, drawerId: drawer.id });
 
-  return NextResponse.json({ ok: true, locked: true });
+  await Promise.all([
+    syncSheet(),
+    // Merge into latest Take/Return for this session+part when possible → "Take + Lock"
+    logSessionRow(
+      {
+        name: visit.displayName,
+        sessionId: visit.trackerSessionId,
+        action: "Lock",
+        part: partName,
+        shelf: drawer.label,
+        quantity: unlockSession?.quantity || 0,
+        locked: true,
+      },
+      "update",
+    ),
+  ]);
+
+  return NextResponse.json({ ok: true, locked: true, drawer: drawerView(drawer, stock) });
 }

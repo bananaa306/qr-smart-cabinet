@@ -147,12 +147,23 @@ body {
   }
 }
 
+@keyframes watcherBreathe {
+  0%,
+  100% {
+    transform: translate3d(0, 0, 0);
+  }
+  50% {
+    transform: translate3d(0, -1.5px, 0);
+  }
+}
+
 .smart-screen {
   position: relative;
   display: flex;
   flex-direction: column;
-  width: 402px;
-  min-height: 874px;
+  width: 100%;
+  height: 100dvh;
+  max-height: 100dvh;
   margin: 0 auto;
   overflow: hidden;
   background: var(--smart-bg);
@@ -160,22 +171,47 @@ body {
   font-family: Archivo, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
 }
 
+.smart-screen-body {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+  overflow-x: hidden;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  padding-bottom: 16px;
+}
+
 .smart-scene {
   position: absolute;
-  top: 0;
-  left: 0;
+  inset: 0;
   z-index: 0;
-  width: 402px;
-  height: 460px;
+  width: 100%;
+  height: 100%;
   overflow: hidden;
   pointer-events: none;
   color: var(--smart-ink);
+}
+
+.smart-scene svg {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
 }
 
 .smart-tram {
   animation: tramFloat 6s var(--ease) infinite;
   transform-box: fill-box;
   transform-origin: center;
+}
+
+.smart-watcher {
+  animation: watcherBreathe 5.5s var(--ease) infinite;
+  transform-box: fill-box;
+  transform-origin: center bottom;
 }
 
 .smart-header {
@@ -236,7 +272,7 @@ body {
   z-index: 1;
   display: flex;
   align-items: center;
-  padding: 10px 16px 0;
+  padding: 10px 16px 56px;
   background-size: 18px 18px;
   background-position: center;
 }
@@ -288,7 +324,7 @@ body {
   left: 0;
   width: 96px;
   border-radius: 7px 0 0 7px;
-  background-image: repeating-linear-gradient(2deg, rgba(75, 55, 25, 0.06) 0 3px, transparent 3px 13px), linear-gradient(90deg, #d8cbad 0%, #c6b78f 55%, #b7a67c 100%);
+  background-image: linear-gradient(90deg, #d8cbad 0%, #c6b78f 55%, #b7a67c 100%);
   box-shadow: inset 3px 0 7px rgba(255, 252, 242, 0.28), inset -10px 0 16px rgba(60, 45, 20, 0.22);
   transform: rotateY(90deg);
   transform-origin: left center;
@@ -364,7 +400,7 @@ body {
   inset: 0;
   cursor: pointer;
   transform-style: preserve-3d;
-  transition: transform 280ms cubic-bezier(0.22, 0.9, 0.32, 1);
+  transition: transform 300ms cubic-bezier(0.22, 0.9, 0.32, 1);
   animation: drawerIn 780ms cubic-bezier(0.3, 1, 0.4, 1) backwards;
 }
 
@@ -377,7 +413,7 @@ body {
   background: linear-gradient(90deg, #ddd3bc, #c8bda1);
   transform: rotateY(90deg);
   transform-origin: left center;
-  transition: opacity 280ms;
+  transition: opacity 300ms;
 }
 
 .smart-tray {
@@ -392,7 +428,7 @@ body {
   box-shadow: inset 0 -14px 16px rgba(0, 0, 0, 0.3), inset 0 2px 3px rgba(255, 253, 248, 0.5);
   transform: rotateX(-90deg);
   transform-origin: top center;
-  transition: opacity 280ms;
+  transition: opacity 300ms;
   animation: trayIn 780ms linear backwards;
 }
 
@@ -417,7 +453,7 @@ body {
   border: 1px solid;
   border-radius: 6px;
   padding: 6px 12px 0;
-  transition: box-shadow 280ms;
+  transition: box-shadow 300ms;
 }
 
 .smart-scoop {
@@ -502,19 +538,15 @@ body {
   transition: background 250ms, color 250ms;
 }
 
-.smart-spacer {
-  flex: 1;
-  padding-top: 30px;
-  padding-bottom: 30px;
-}
-
 .smart-bottom-nav {
   position: relative;
-  z-index: 1;
+  z-index: 20;
   display: flex;
+  flex-shrink: 0;
+  align-items: stretch;
   border-top: 1px solid rgba(245, 240, 228, 0.14);
   background-color: #2b2c2a;
-  padding: 10px 0 20px;
+  padding: 8px 12px max(12px, env(safe-area-inset-bottom, 0px));
 }
 
 .smart-bottom-nav button {
@@ -522,7 +554,10 @@ body {
   flex: 1;
   flex-direction: column;
   align-items: center;
-  gap: 5px;
+  justify-content: center;
+  gap: 6px;
+  min-height: 52px;
+  padding: 6px 8px;
   cursor: pointer;
 }
 
@@ -532,8 +567,232 @@ body {
 
 .smart-bottom-nav b {
   color: #c9c0ab;
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 700;
+  line-height: 1.2;
+}
+
+.smart-activity-content {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  padding: 8px 20px 16px;
+  overflow: auto;
+}
+
+.smart-legal-footer {
+  margin-top: auto;
+  padding: 28px 4px 8px;
+  text-align: center;
+}
+
+.smart-legal-footer nav {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: 8px 10px;
+  margin-bottom: 10px;
+}
+
+.smart-legal-footer a {
+  color: var(--smart-sub);
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  text-decoration: underline;
+  text-decoration-color: color-mix(in srgb, var(--smart-sub) 45%, transparent);
+  text-underline-offset: 3px;
+}
+
+.smart-legal-footer a:hover {
+  color: var(--smart-ink);
+}
+
+.smart-legal-footer nav span {
+  color: color-mix(in srgb, var(--smart-sub) 55%, transparent);
+  font-size: 12px;
+}
+
+.smart-legal-footer p {
+  margin: 0;
+  color: color-mix(in srgb, var(--smart-sub) 85%, transparent);
+  font-size: 11px;
+  line-height: 1.45;
+}
+
+.smart-legal-back {
+  flex-shrink: 0;
+  border: 1px solid var(--smart-panel-border);
+  border-radius: 999px;
+  background: var(--smart-panel-bg);
+  padding: 8px 14px;
+  color: var(--smart-ink);
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.smart-legal-doc {
+  flex: 1;
+  overflow: auto;
+  padding: 4px 20px 40px;
+  color: var(--smart-ink);
+}
+
+.smart-legal-updated {
+  margin: 0 0 20px;
+  color: var(--smart-sub);
+  font-size: 12px;
+}
+
+.smart-legal-doc section {
+  margin-bottom: 22px;
+}
+
+.smart-legal-doc h2 {
+  margin: 0 0 8px;
+  font-size: 15px;
+  font-weight: 700;
+}
+
+.smart-legal-doc p,
+.smart-legal-doc li {
+  margin: 0;
+  color: color-mix(in srgb, var(--smart-ink) 88%, var(--smart-sub));
+  font-size: 14px;
+  line-height: 1.55;
+}
+
+.smart-legal-doc p + p {
+  margin-top: 10px;
+}
+
+.smart-legal-doc ul {
+  margin: 8px 0 0;
+  padding-left: 1.15rem;
+}
+
+.smart-legal-doc li + li {
+  margin-top: 6px;
+}
+
+.smart-legal-doc strong {
+  color: var(--smart-ink);
+  font-weight: 650;
+}
+
+.smart-activity-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.smart-activity-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  border: 1px solid var(--smart-panel-border);
+  border-radius: 16px;
+  background: var(--smart-panel-bg);
+  padding: 12px;
+}
+
+.smart-activity-badge {
+  display: grid;
+  width: 40px;
+  height: 40px;
+  flex-shrink: 0;
+  place-items: center;
+  border-radius: 12px;
+}
+
+.smart-activity-badge.take {
+  background: color-mix(in srgb, var(--smart-accent) 18%, transparent);
+  color: var(--smart-accent);
+}
+
+.smart-activity-badge.return {
+  background: rgba(74, 157, 106, 0.18);
+  color: #6ecf8f;
+}
+
+.smart-activity-row-main {
+  min-width: 0;
+  flex: 1;
+}
+
+.smart-activity-row-main p:first-child {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.smart-activity-row-main p:last-child {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--smart-sub);
+  font-size: 12px;
+}
+
+.smart-activity-row-stat {
+  text-align: right;
+}
+
+.smart-activity-row-stat b {
+  display: block;
+  font-size: 14px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+.smart-activity-row-stat b.take {
+  color: var(--smart-accent);
+}
+
+.smart-activity-row-stat b.return {
+  color: #6ecf8f;
+}
+
+.smart-activity-row-stat span {
+  color: var(--smart-sub);
+  font-size: 12px;
+}
+
+.smart-activity-empty {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  padding: 48px 24px;
+  text-align: center;
+  color: var(--smart-sub);
+  font-size: 14px;
+}
+
+.smart-activity-empty svg {
+  opacity: 0.55;
+}
+
+.smart-loading {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  padding: 80px 24px;
+  color: var(--smart-sub);
+  font-size: 14px;
+}
+
+.smart-loading .spin {
+  border-color: var(--smart-panel-border);
+  border-top-color: var(--smart-accent);
 }
 
 .smart-drawer-icon {
@@ -577,25 +836,47 @@ body {
   height: 5px;
 }
 
-.smart-detail {
-  position: absolute;
+.smart-detail-overlay {
+  position: fixed;
   inset: 0;
-  left: -2px;
-  top: -4px;
   z-index: 30;
   display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 10px;
+  transition: opacity 220ms ease;
+}
+
+.smart-detail-backdrop {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  background: rgba(8, 6, 4, 0.52);
+}
+
+.smart-detail {
+  position: relative;
+  z-index: 1;
+  display: flex;
   flex-direction: column;
-  width: 402px;
-  height: 878px;
-  overflow: hidden;
-  transition: opacity 200ms ease, transform 240ms cubic-bezier(0.22, 0.9, 0.32, 1);
+  align-items: stretch;
+  width: min(386px, calc(100% - 16px));
+  height: auto;
+  max-height: calc(100dvh - 20px);
+  overflow-x: hidden;
+  overflow-y: auto;
+  border: 1px solid var(--smart-panel-border);
+  border-radius: 20px;
+  box-shadow: 0 28px 72px rgba(0, 0, 0, 0.45);
+  transition: transform 240ms cubic-bezier(0.22, 0.9, 0.32, 1);
 }
 
 .smart-detail header {
   display: flex;
+  flex-shrink: 0;
   align-items: center;
   gap: 12px;
-  padding: 18px 16px 6px;
+  padding: 14px 16px 4px;
 }
 
 .smart-detail header button {
@@ -623,7 +904,7 @@ body {
   display: flex;
   align-items: center;
   gap: 10px;
-  padding: 10px 20px 16px;
+  padding: 6px 20px 10px;
 }
 
 .smart-lock-row div {
@@ -661,7 +942,7 @@ body {
   position: relative;
   display: flex;
   width: 100%;
-  height: 210px;
+  height: 140px;
   align-items: center;
   justify-content: center;
   overflow: hidden;
@@ -689,15 +970,24 @@ body {
 }
 
 .smart-detail-copy {
-  padding: 20px 20px 0;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 14px 20px 0;
+}
+
+.smart-detail-copy-main {
+  min-width: 0;
+  flex: 1;
 }
 
 .smart-detail-copy h2 {
-  font-size: 20px;
+  font-size: 18px;
   font-weight: 800;
 }
 
-.smart-detail-copy div {
+.smart-detail-copy-main > div {
   display: flex;
   align-items: baseline;
   gap: 6px;
@@ -705,7 +995,7 @@ body {
 }
 
 .smart-detail-copy b {
-  font-size: 34px;
+  font-size: 28px;
   font-weight: 800;
   letter-spacing: -0.02em;
 }
@@ -716,19 +1006,86 @@ body {
   font-weight: 500;
 }
 
+.smart-lock-switch {
+  display: flex;
+  flex-shrink: 0;
+  flex-direction: column;
+  align-items: center;
+  gap: 5px;
+}
+
+.smart-lock-caption {
+  color: var(--smart-sub) !important;
+  font-size: 10px !important;
+  font-weight: 700 !important;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
+.smart-lock-track {
+  -webkit-appearance: none;
+  appearance: none;
+  position: relative;
+  display: block;
+  flex-shrink: 0;
+  width: 56px;
+  min-width: 56px;
+  height: 32px;
+  min-height: 32px;
+  border: 1.5px solid rgba(142, 182, 232, 0.55);
+  border-radius: 999px;
+  padding: 0;
+  background: #1f5fa8;
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.08);
+  cursor: grab;
+  user-select: none;
+  outline: none;
+  transition:
+    background 200ms ease,
+    border-color 200ms ease;
+}
+
+.smart-lock-track:active {
+  cursor: grabbing;
+}
+
+.smart-lock-track.is-locked {
+  background: #3a4558;
+  border-color: rgba(242, 236, 221, 0.28);
+}
+
+.smart-lock-track.is-open {
+  background: #1f5fa8;
+  border-color: rgba(142, 182, 232, 0.7);
+}
+
+.smart-lock-thumb {
+  position: absolute;
+  top: 3px;
+  left: 3px;
+  display: block;
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  background: #fffdf8;
+  box-shadow: 0 1px 5px rgba(0, 0, 0, 0.35);
+  pointer-events: none;
+  will-change: transform;
+}
+
 .smart-mode-row {
   display: flex;
   gap: 10px;
-  padding: 18px 20px 0;
+  padding: 12px 20px 0;
 }
 
 .smart-mode-row button {
   flex: 1;
   border: 1px solid;
   border-radius: 14px;
-  padding: 13px;
+  padding: 11px;
   text-align: center;
-  font-size: 14.5px;
+  font-size: 14px;
   font-weight: 700;
   cursor: pointer;
   transition: background 200ms, color 200ms;
@@ -738,11 +1095,11 @@ body {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  margin: 16px 20px 0;
+  margin: 12px 20px 0;
   border: 1px solid var(--smart-panel-border);
   border-radius: 16px;
   background: var(--smart-panel-bg);
-  padding: 10px 14px;
+  padding: 8px 14px;
 }
 
 .smart-stepper button {
@@ -788,23 +1145,270 @@ body {
   font-weight: 700;
 }
 
-.smart-detail-fill {
-  flex: 1;
-  width: 402px;
-  height: 100px;
+.smart-detail-body {
+  flex: 0 0 auto;
+  overflow: visible;
 }
 
-.smart-cta {
-  margin: 16px 20px 28px;
-  border-radius: 16px;
-  padding: 16px;
+.smart-detail-actions {
+  flex-shrink: 0;
+  padding: 10px 16px 12px;
+  border-top: 1px solid var(--smart-panel-border);
+  background: linear-gradient(180deg, transparent, rgba(0, 0, 0, 0.1));
+}
+
+.smart-detail-fill {
+  display: none;
+}
+
+.smart-detail .smart-cta {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  min-height: 48px;
+  border: none;
+  border-radius: 14px;
+  padding: 12px 16px;
   color: #fffdf8;
   text-align: center;
   font-size: 15px;
   font-weight: 800;
+  letter-spacing: 0.02em;
   cursor: pointer;
+  box-sizing: border-box;
+  box-shadow:
+    0 10px 28px color-mix(in srgb, var(--smart-accent) 42%, transparent),
+    0 2px 8px rgba(0, 0, 0, 0.28);
+  transition: transform 150ms ease, box-shadow 150ms ease, filter 150ms ease;
 }
 
-.smart-cta:disabled {
+.smart-detail .smart-cta:not(:disabled):active {
+  transform: scale(0.98);
+  box-shadow:
+    0 6px 16px color-mix(in srgb, var(--smart-accent) 34%, transparent),
+    0 1px 4px rgba(0, 0, 0, 0.22);
+}
+
+.smart-detail .smart-cta:disabled {
   opacity: 0.45;
+  box-shadow: none;
+}
+
+.smart-signin-body {
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+}
+
+.smart-signin-header {
+  animation: fadeDown 500ms var(--ease) both;
+}
+
+.smart-signin {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  justify-content: center;
+  gap: 36px;
+  padding: 28px 22px max(40px, env(safe-area-inset-bottom, 0px));
+}
+
+.smart-signin-copy {
+  animation: fadeDown 520ms var(--ease) 60ms both;
+}
+
+.smart-signin-kicker {
+  margin: 0 0 10px;
+  color: var(--smart-accent);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+}
+
+.smart-signin-title {
+  margin: 0;
+  color: var(--smart-ink);
+  font-size: clamp(28px, 8vw, 34px);
+  font-weight: 800;
+  letter-spacing: -0.03em;
+  line-height: 1.05;
+}
+
+.smart-signin-lead {
+  margin: 12px 0 0;
+  max-width: 28ch;
+  color: var(--smart-sub);
+  font-size: 14.5px;
+  line-height: 1.45;
+}
+
+.smart-signin-form {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+  animation: fadeDown 560ms var(--ease) 120ms both;
+}
+
+.smart-signin-field {
+  position: relative;
+  padding-top: 18px;
+}
+
+.smart-signin-label {
+  position: absolute;
+  top: 30px;
+  left: 0;
+  color: var(--smart-sub);
+  font-size: 18px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  pointer-events: none;
+  transition:
+    top 180ms var(--ease),
+    font-size 180ms var(--ease),
+    color 180ms var(--ease),
+    opacity 180ms var(--ease);
+}
+
+.smart-signin-field:focus-within .smart-signin-label,
+.smart-signin-field.filled .smart-signin-label {
+  top: 0;
+  color: var(--smart-accent);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.smart-signin-input {
+  width: 100%;
+  min-height: 48px;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  padding: 8px 0 12px;
+  color: var(--smart-ink);
+  font-size: 22px;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  box-sizing: border-box;
+  caret-color: var(--smart-accent);
+}
+
+.smart-signin-input:focus {
+  outline: none;
+}
+
+.smart-signin-input:disabled {
+  opacity: 0.55;
+}
+
+.smart-signin-underline {
+  display: block;
+  width: 100%;
+  height: 1px;
+  background: var(--smart-panel-border);
+  transform-origin: left center;
+  transition: background 180ms var(--ease);
+}
+
+.smart-signin-underline::after {
+  content: "";
+  display: block;
+  width: 100%;
+  height: 1.5px;
+  background: var(--smart-accent);
+  transform: scaleX(0);
+  transform-origin: left center;
+  transition: transform 220ms var(--ease);
+}
+
+.smart-signin-field:focus-within .smart-signin-underline::after,
+.smart-signin-field.filled .smart-signin-underline::after {
+  transform: scaleX(1);
+}
+
+.smart-signin-error {
+  margin: -4px 0 0;
+  color: #f0a0a8;
+  font-size: 13px;
+  font-weight: 600;
+  animation: fadeDown 220ms var(--ease) both;
+}
+
+.smart-session-chip {
+  display: flex;
+  max-width: 46%;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 2px;
+  text-align: right;
+}
+
+.smart-session-chip span {
+  color: var(--smart-sub);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+
+.smart-session-chip b {
+  overflow: hidden;
+  max-width: 100%;
+  color: var(--smart-ink);
+  font-size: 14px;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.smart-signin-submit {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  width: 100%;
+  min-height: 54px;
+  margin-top: 6px;
+  border: none;
+  border-radius: 16px;
+  padding: 14px 18px;
+  color: #fffdf8;
+  font-size: 15px;
+  font-weight: 800;
+  letter-spacing: 0.02em;
+  cursor: pointer;
+  box-shadow:
+    0 14px 34px color-mix(in srgb, var(--smart-accent) 38%, transparent),
+    0 2px 8px rgba(0, 0, 0, 0.24);
+  transition:
+    transform 160ms var(--ease),
+    opacity 160ms var(--ease),
+    box-shadow 160ms var(--ease),
+    filter 160ms var(--ease);
+}
+
+.smart-signin-submit:not(:disabled):active {
+  transform: scale(0.98);
+  box-shadow:
+    0 8px 18px color-mix(in srgb, var(--smart-accent) 30%, transparent),
+    0 1px 4px rgba(0, 0, 0, 0.22);
+}
+
+.smart-signin-submit:disabled {
+  opacity: 0.38;
+  cursor: not-allowed;
+  box-shadow: none;
+}
+
+.smart-signin-submit svg {
+  transition: transform 180ms var(--ease);
+}
+
+.smart-signin-submit:not(:disabled):hover svg {
+  transform: translateX(2px);
 }

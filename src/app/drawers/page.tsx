@@ -3,6 +3,13 @@
 import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Spinner } from "@/components/ui";
+import {
+  BottomTabs,
+  buildSmartScreenStyle,
+  RooseveltIslandScene,
+  SMART_ACCENT,
+  smartEspressoTheme,
+} from "@/components/smart-shell";
 import { api, uuid } from "@/lib/client";
 import type { DrawerView } from "@/lib/dto";
 
@@ -21,7 +28,7 @@ interface ThemeTokens {
   panelBorder: string;
 }
 
-interface UnlockResult {
+interface TxResult {
   transaction: {
     id: string;
     delta: number;
@@ -34,7 +41,6 @@ interface UnlockResult {
 
 const BLUE = "#1F5FA8";
 const INK = "#1C2B4A";
-const ORIGINAL_ACCENT: Accent = "#CF2233";
 
 const themes: Record<ThemeName, ThemeTokens> = {
   Espresso: {
@@ -91,10 +97,14 @@ export default function DrawersPage() {
   const router = useRouter();
   const [drawers, setDrawers] = useState<DrawerView[] | null>(null);
   const [sheets, setSheets] = useState(false);
+  const [sessionName, setSessionName] = useState<string | null>(null);
   const [openIdx, setOpenIdx] = useState<number | null>(null);
   const [detailIdx, setDetailIdx] = useState<number | null>(null);
   const [detailPhase, setDetailPhase] = useState<DetailPhase>("idle");
   const closeTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const openTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const DETAIL_REVEAL_DELAY_MS = 320;
 
   useEffect(() => {
     api<{ drawers: DrawerView[]; sheets: boolean }>("/api/drawers").then(
@@ -108,24 +118,34 @@ export default function DrawersPage() {
         }
       },
     );
+    api<{ user: { name: string } | null }>("/api/auth/me").then(({ ok, data }) => {
+      if (ok && data.user?.name) setSessionName(data.user.name);
+    });
   }, [router]);
 
-  const t = themes.Espresso;
-  const accent = ORIGINAL_ACCENT;
+  const t = smartEspressoTheme;
+  const accent = SMART_ACCENT;
   const rulerBg = `repeating-linear-gradient(180deg, ${t.line} 0px, ${t.line} 1.5px, transparent 1.5px, transparent 70px), repeating-linear-gradient(180deg, ${t.dot} 0px, ${t.dot} 1px, transparent 1px, transparent 14px)`;
   const dotBg = `radial-gradient(${t.dot} 1px, transparent 1.2px)`;
   const detail = detailIdx !== null && drawers ? drawers[detailIdx] : null;
 
   function openDrawer(i: number) {
+    if (openTimer.current) clearTimeout(openTimer.current);
+    if (closeTimer.current) clearTimeout(closeTimer.current);
+    setDetailIdx(null);
+    setDetailPhase("idle");
     setOpenIdx(i);
-    setDetailIdx(i);
-    setDetailPhase("enter");
-    requestAnimationFrame(() => {
-      requestAnimationFrame(() => setDetailPhase("shown"));
-    });
+    openTimer.current = setTimeout(() => {
+      setDetailIdx(i);
+      setDetailPhase("enter");
+      requestAnimationFrame(() => {
+        requestAnimationFrame(() => setDetailPhase("shown"));
+      });
+    }, DETAIL_REVEAL_DELAY_MS);
   }
 
   function closeDrawer() {
+    if (openTimer.current) clearTimeout(openTimer.current);
     setDetailPhase("exit");
     if (closeTimer.current) clearTimeout(closeTimer.current);
     closeTimer.current = setTimeout(() => {
@@ -142,56 +162,52 @@ export default function DrawersPage() {
   }
 
   return (
-    <div className="min-h-dvh" style={{ background: t.bg }}>
+    <div className="h-dvh overflow-hidden" style={{ background: t.bg }}>
       <main
         className="smart-screen"
-        style={
-          {
-            "--smart-bg": t.bg,
-            "--smart-ink": t.ink,
-            "--smart-sub": t.sub,
-            "--smart-line": t.line,
-            "--smart-dot": t.dot,
-            "--smart-panel-bg": t.panelBg,
-            "--smart-panel-border": t.panelBorder,
-            "--smart-accent": accent,
-          } as React.CSSProperties
-        }
+        style={buildSmartScreenStyle(t, accent)}
       >
         <RooseveltIslandScene />
 
-        <header className="smart-header">
-          <div>
-            <div className="smart-eyebrow">NYC FIRST</div>
-            <h1>Smart Cabinet</h1>
-          </div>
-        </header>
+        <div className="smart-screen-body">
+          <header className="smart-header">
+            <div>
+              <div className="smart-eyebrow">NYC FIRST</div>
+              <h1>Smart Cabinet</h1>
+            </div>
+            {sessionName && (
+              <div className="smart-session-chip" title={`Signed in as ${sessionName}`}>
+                <span>Signed in</span>
+                <b>{sessionName}</b>
+              </div>
+            )}
+          </header>
 
-        <SyncBar connected={sheets} accent={accent} />
+          <SyncBar connected={sheets} accent={accent} />
 
-        {drawers === null ? (
-          <div className="relative z-[1] px-5 pt-24">
-            <Spinner label="Loading cabinet..." />
-          </div>
-        ) : drawers.length === 0 ? (
-          <p className="relative z-[1] mx-5 mt-24 rounded-2xl border border-[var(--smart-panel-border)] bg-[var(--smart-panel-bg)] p-5 text-center text-sm text-[var(--smart-sub)]">
-            No drawers available for your account.
-          </p>
-        ) : (
-          <CabinetStage
-            drawers={drawers}
-            accent={accent}
-            openIdx={openIdx}
-            stagger={90}
-            rulerBg={rulerBg}
-            dotBg={dotBg}
-            line={t.line}
-            onOpen={openDrawer}
-          />
-        )}
+          {drawers === null ? (
+            <div className="relative z-[1] px-5 pt-24">
+              <Spinner label="Loading cabinet..." />
+            </div>
+          ) : drawers.length === 0 ? (
+            <p className="relative z-[1] mx-5 mt-24 rounded-2xl border border-[var(--smart-panel-border)] bg-[var(--smart-panel-bg)] p-5 text-center text-sm text-[var(--smart-sub)]">
+              No drawers available for your account.
+            </p>
+          ) : (
+            <CabinetStage
+              drawers={drawers}
+              accent={accent}
+              openIdx={openIdx}
+              stagger={90}
+              rulerBg={rulerBg}
+              dotBg={dotBg}
+              line={t.line}
+              onOpen={openDrawer}
+            />
+          )}
+        </div>
 
-        <div className="smart-spacer" />
-        <BottomTabs accent={accent} />
+        {detailIdx === null && <BottomTabs accent={accent} active="drawers" />}
 
         <DrawerDetail
           drawer={detail}
@@ -416,18 +432,39 @@ function DrawerDetail({
   const [mode, setMode] = useState<Intent>("take");
   const [qty, setQty] = useState(1);
   const [working, setWorking] = useState(false);
+  const [lockWorking, setLockWorking] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [photoPreview, setPhotoPreview] = useState<string | null>(null);
+  const [slideX, setSlideX] = useState(0); // 0 = locked, 1 = open
+  const [dragging, setDragging] = useState(false);
+  const dragRef = useRef<{
+    startX: number;
+    startSlide: number;
+    currentSlide: number;
+    dragging: boolean;
+    moved: boolean;
+  } | null>(null);
+  const trackRef = useRef<HTMLDivElement | null>(null);
   const idemKey = useRef(uuid());
+  const lockIdemKey = useRef(uuid());
+  const TRAVEL = 24; // thumb travel in px
 
   useEffect(() => {
     setMode("take");
     setQty(1);
     setWorking(false);
+    setLockWorking(false);
     setError(null);
     setPhotoPreview(null);
+    setSlideX(drawer?.locked === false ? 1 : 0);
     idemKey.current = uuid();
+    lockIdemKey.current = uuid();
   }, [drawer?.id]);
+
+  useEffect(() => {
+    if (lockWorking || dragRef.current?.dragging) return;
+    setSlideX(drawer?.locked === false ? 1 : 0);
+  }, [drawer?.locked, lockWorking]);
 
   const max = drawer ? Math.max(drawer.quantity, 1) : 1;
   const clampedQty = Math.max(1, Math.min(qty, mode === "take" ? max : 99));
@@ -440,14 +477,109 @@ function DrawerDetail({
         : "ok"
     : "ok";
   const countColor = status === "empty" ? t.sub : status === "low" ? accent : t.ink;
+  const isOpen = slideX >= 0.5;
+
+  async function commitLock(wantOpen: boolean) {
+    if (!drawer) return;
+    const currentlyOpen = !drawer.locked;
+    if (wantOpen === currentlyOpen) {
+      setSlideX(wantOpen ? 1 : 0);
+      return;
+    }
+
+    setLockWorking(true);
+    setError(null);
+    setSlideX(wantOpen ? 1 : 0);
+
+    const path = wantOpen
+      ? `/api/drawers/${encodeURIComponent(drawer.id)}/unlock`
+      : `/api/drawers/${encodeURIComponent(drawer.id)}/lock`;
+    const { ok, status: httpStatus, data } = await api<{
+      error?: string;
+      drawer?: DrawerView;
+      locked?: boolean;
+    }>(path, {
+      method: "POST",
+      body: wantOpen
+        ? JSON.stringify({ idempotencyKey: lockIdemKey.current })
+        : JSON.stringify({}),
+    });
+
+    setLockWorking(false);
+    lockIdemKey.current = uuid();
+
+    if (ok && data.drawer) {
+      onUpdated(data.drawer);
+      setSlideX(data.drawer.locked ? 0 : 1);
+      return;
+    }
+    if (httpStatus === 401) {
+      window.location.href = "/signin";
+      return;
+    }
+    // revert slide
+    setSlideX(currentlyOpen ? 1 : 0);
+    if (data.drawer) onUpdated(data.drawer);
+    const messages: Record<string, string> = {
+      drawer_busy: "This drawer is open right now. Try again shortly.",
+      cooldown: "This drawer just closed. Give it a moment.",
+      rate_limited: "Lock limit reached. Try again later.",
+      drawer_disabled: "This drawer is disabled.",
+      lock_error: "The lock did not respond. Try again.",
+      not_open: "Someone else has this drawer open.",
+    };
+    setError(
+      messages[data.error ?? ""] ??
+        (wantOpen ? "Could not unlock. Try again." : "Could not lock. Try again."),
+    );
+  }
+
+  function onPointerDown(event: React.PointerEvent<HTMLDivElement>) {
+    if (lockWorking || drawer?.status === "disabled") return;
+    event.currentTarget.setPointerCapture(event.pointerId);
+    setDragging(true);
+    dragRef.current = {
+      startX: event.clientX,
+      startSlide: slideX,
+      currentSlide: slideX,
+      dragging: true,
+      moved: false,
+    };
+  }
+
+  function onPointerMove(event: React.PointerEvent<HTMLDivElement>) {
+    const drag = dragRef.current;
+    if (!drag?.dragging) return;
+    const delta = (event.clientX - drag.startX) / TRAVEL;
+    if (Math.abs(event.clientX - drag.startX) > 3) drag.moved = true;
+    const next = Math.max(0, Math.min(1, drag.startSlide + delta));
+    drag.currentSlide = next;
+    setSlideX(next);
+  }
+
+  function onPointerUp() {
+    const drag = dragRef.current;
+    if (!drag) return;
+    const start = drag.startSlide;
+    const moved = drag.moved;
+    const endSlide = drag.currentSlide;
+    drag.dragging = false;
+    dragRef.current = null;
+    setDragging(false);
+    if (!moved) {
+      void commitLock(start < 0.5);
+    } else {
+      void commitLock(endSlide >= 0.5);
+    }
+  }
 
   async function confirm() {
     if (!drawer) return;
     setWorking(true);
     setError(null);
     const { ok, status: httpStatus, data } = await api<
-      UnlockResult & { error?: string; drawer?: DrawerView }
-    >(`/api/drawers/${encodeURIComponent(drawer.id)}/unlock`, {
+      TxResult & { error?: string; drawer?: DrawerView }
+    >(`/api/drawers/${encodeURIComponent(drawer.id)}/transaction`, {
       method: "POST",
       body: JSON.stringify({
         quantity: clampedQty,
@@ -474,13 +606,10 @@ function DrawerDetail({
     const messages: Record<string, string> = {
       stock_changed: "Stock changed. Review the latest count and try again.",
       insufficient_stock: "There is not enough stock for that quantity.",
-      drawer_busy: "This drawer is open right now. Try again shortly.",
-      cooldown: "This drawer just closed. Give it a moment.",
-      rate_limited: "Unlock limit reached. Try again later.",
+      rate_limited: "Limit reached. Try again later.",
       drawer_disabled: "This drawer is disabled.",
-      lock_error: "The lock did not respond. Nothing changed.",
     };
-    setError(messages[data.error ?? ""] ?? "Could not unlock. Try again.");
+    setError(messages[data.error ?? ""] ?? "Could not record that. Try again.");
   }
 
   function handleDrop(files: FileList | null) {
@@ -493,14 +622,18 @@ function DrawerDetail({
 
   return (
     <div
-      className="smart-detail"
-      style={{
-        background: t.bg,
-        color: t.ink,
-        opacity: shown ? 1 : 0,
-        transform: shown ? "translateY(0) scale(1)" : "translateY(26px) scale(0.94)",
-      }}
+      className="smart-detail-overlay"
+      style={{ opacity: shown ? 1 : 0, pointerEvents: shown ? "auto" : "none" }}
     >
+      <div className="smart-detail-backdrop" onClick={onClose} aria-hidden />
+      <div
+        className="smart-detail"
+        style={{
+          background: t.bg,
+          color: t.ink,
+          transform: shown ? "scale(1)" : "scale(0.96) translateY(12px)",
+        }}
+      >
       <header>
         <button onClick={onClose} aria-label="Back">
           <svg width="9" height="15" viewBox="0 0 9 15" fill="none" aria-hidden>
@@ -510,189 +643,157 @@ function DrawerDetail({
         <div>Smart Cabinet · Drawer {index + 1}</div>
       </header>
 
-      <div className="smart-lock-row">
-        <div>
-          <span />
-          <b>{drawer.locked ? "Locked" : "Unlocked"}</b>
+      <div className="smart-detail-body">
+        <div className="smart-lock-row">
+          <div>
+            <span />
+            <b>{drawer.locked ? "Locked" : "Unlocked"}</b>
+          </div>
+          <p>NYC FIRST · Workshop</p>
         </div>
-        <p>NYC FIRST · Workshop</p>
-      </div>
 
-      <div className="smart-photo-pad">
-        <label
-          className="smart-photo-slot"
-          onDragOver={(event) => event.preventDefault()}
-          onDrop={(event) => {
-            event.preventDefault();
-            handleDrop(event.dataTransfer.files);
-          }}
-        >
-          {photoPreview ? (
-            // eslint-disable-next-line @next/next/no-img-element
-            <img src={photoPreview} alt="" />
-          ) : drawer.item.photo ? (
-            // eslint-disable-next-line @next/next/no-img-element
-            <img src={drawer.item.photo} alt="" />
-          ) : null}
-          <span>Drop a photo of this item</span>
-          <input
-            className="sr-only"
-            type="file"
-            accept="image/*"
-            onChange={(event) => handleDrop(event.target.files)}
-          />
-        </label>
-      </div>
-
-      <section className="smart-detail-copy">
-        <h2>{drawer.item.name}</h2>
-        <div>
-          <b style={{ color: countColor }}>{drawer.quantity}</b>
-          <span>{pluralUnit(drawer.item.unit, drawer.quantity)} in stock</span>
+        <div className="smart-photo-pad">
+          <label
+            className="smart-photo-slot"
+            onDragOver={(event) => event.preventDefault()}
+            onDrop={(event) => {
+              event.preventDefault();
+              handleDrop(event.dataTransfer.files);
+            }}
+          >
+            {photoPreview ? (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img src={photoPreview} alt="" />
+            ) : drawer.item.photo ? (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img src={drawer.item.photo} alt="" />
+            ) : null}
+            <span>Drop a photo of this item</span>
+            <input
+              className="sr-only"
+              type="file"
+              accept="image/*"
+              onChange={(event) => handleDrop(event.target.files)}
+            />
+          </label>
         </div>
-      </section>
 
-      <div className="smart-mode-row">
-        <button
-          onClick={() => {
-            setMode("take");
-            setQty(1);
-          }}
-          style={{
-            background: mode === "take" ? accent : t.panelBg,
-            color: mode === "take" ? "#FFFDF8" : t.sub,
-            borderColor: mode === "take" ? accent : t.panelBorder,
-          }}
-        >
-          Take
-        </button>
-        <button
-          onClick={() => {
-            setMode("return");
-            setQty(1);
-          }}
-          style={{
-            background: mode === "return" ? accent : t.panelBg,
-            color: mode === "return" ? "#FFFDF8" : t.sub,
-            borderColor: mode === "return" ? accent : t.panelBorder,
-          }}
-        >
-          Return
-        </button>
-      </div>
+        <section className="smart-detail-copy">
+          <div className="smart-detail-copy-main">
+            <h2>{drawer.item.name}</h2>
+            <div>
+              <b style={{ color: countColor }}>{drawer.quantity}</b>
+              <span>{pluralUnit(drawer.item.unit, drawer.quantity)} in stock</span>
+            </div>
+          </div>
+          <div className="smart-lock-switch">
+            <div
+              ref={trackRef}
+              role="switch"
+              tabIndex={lockWorking || drawer.status === "disabled" ? -1 : 0}
+              aria-checked={isOpen}
+              aria-label={isOpen ? "Lock drawer" : "Unlock drawer"}
+              className={isOpen ? "smart-lock-track is-open" : "smart-lock-track is-locked"}
+              onPointerDown={onPointerDown}
+              onPointerMove={onPointerMove}
+              onPointerUp={onPointerUp}
+              onPointerCancel={onPointerUp}
+              onKeyDown={(event) => {
+                if (event.key === "Enter" || event.key === " ") {
+                  event.preventDefault();
+                  void commitLock(!isOpen);
+                }
+              }}
+              style={{
+                opacity: lockWorking || drawer.status === "disabled" ? 0.5 : 1,
+                touchAction: "none",
+              }}
+            >
+              <span
+                className="smart-lock-thumb"
+                aria-hidden
+                style={{
+                  transform: `translateX(${slideX * TRAVEL}px)`,
+                  transition: dragging ? "none" : "transform 180ms ease",
+                }}
+              />
+            </div>
+            <span className="smart-lock-caption">
+              {lockWorking ? "…" : isOpen ? "Open" : "Locked"}
+            </span>
+          </div>
+        </section>
 
-      <div className="smart-stepper">
-        <button
-          onClick={() => setQty((value) => Math.max(1, value - 1))}
-          disabled={clampedQty <= 1}
-        >
-          -
-        </button>
-        <div>
-          <b>{clampedQty}</b>
-          <span>
-            max {mode === "take" ? max : 99} {pluralUnit(drawer.item.unit, max)}
-          </span>
+        <div className="smart-mode-row">
+          <button
+            onClick={() => {
+              setMode("take");
+              setQty(1);
+            }}
+            style={{
+              background: mode === "take" ? accent : t.panelBg,
+              color: mode === "take" ? "#FFFDF8" : t.sub,
+              borderColor: mode === "take" ? accent : t.panelBorder,
+            }}
+          >
+            Take
+          </button>
+          <button
+            onClick={() => {
+              setMode("return");
+              setQty(1);
+            }}
+            style={{
+              background: mode === "return" ? accent : t.panelBg,
+              color: mode === "return" ? "#FFFDF8" : t.sub,
+              borderColor: mode === "return" ? accent : t.panelBorder,
+            }}
+          >
+            Return
+          </button>
         </div>
-        <button
-          onClick={() => setQty((value) => Math.min(mode === "take" ? max : 99, value + 1))}
-          disabled={clampedQty >= (mode === "take" ? max : 99)}
-          style={{ background: accent, color: "#FFFDF8" }}
-        >
-          +
-        </button>
+
+        <div className="smart-stepper">
+          <button
+            onClick={() => setQty((value) => Math.max(1, value - 1))}
+            disabled={clampedQty <= 1}
+          >
+            -
+          </button>
+          <div>
+            <b>{clampedQty}</b>
+            <span>
+              max {mode === "take" ? max : 99} {pluralUnit(drawer.item.unit, max)}
+            </span>
+          </div>
+          <button
+            onClick={() => setQty((value) => Math.min(mode === "take" ? max : 99, value + 1))}
+            disabled={clampedQty >= (mode === "take" ? max : 99)}
+            style={{ background: accent, color: "#FFFDF8" }}
+          >
+            +
+          </button>
+        </div>
+
+        {error && <p className="smart-error">{error}</p>}
       </div>
 
-      {error && <p className="smart-error">{error}</p>}
-
-      <div className="smart-detail-fill" />
-      <button
-        className="smart-cta"
-        onClick={confirm}
-        disabled={working || drawer.status === "disabled" || (mode === "take" && drawer.quantity === 0)}
-        style={{ background: accent }}
-      >
-        {working
-          ? "Unlocking..."
-          : mode === "take"
-            ? `Unlock & take ${clampedQty}`
-            : `Unlock & return ${clampedQty}`}
-      </button>
+      <div className="smart-detail-actions">
+        <button
+          type="button"
+          className="smart-cta w-full"
+          onClick={confirm}
+          disabled={working || drawer.status === "disabled" || (mode === "take" && drawer.quantity === 0)}
+          style={{ background: accent }}
+        >
+          {working
+            ? "Saving…"
+            : mode === "take"
+              ? `Take ${clampedQty}`
+              : `Return ${clampedQty}`}
+        </button>
+      </div>
     </div>
-  );
-}
-
-function BottomTabs({ accent }: { accent: Accent }) {
-  return (
-    <nav className="smart-bottom-nav">
-      <button type="button">
-        <div className="smart-drawer-icon">
-          <span style={{ background: accent }} />
-          <span style={{ background: accent }} />
-        </div>
-        <b style={{ color: accent }}>Drawers</b>
-      </button>
-      <button type="button" className="inactive" onClick={() => (window.location.href = "/activity")}>
-        <div className="smart-activity-icon">
-          <span />
-          <span />
-          <span />
-        </div>
-        <b>My activity</b>
-      </button>
-    </nav>
-  );
-}
-
-function RooseveltIslandScene() {
-  return (
-    <div className="smart-scene">
-      <svg width="402" height="460" viewBox="0 0 402 460" fill="none" aria-hidden>
-        <g opacity="0.09" fill="currentColor">
-          <rect x="6" y="150" width="13" height="22" />
-          <rect x="22" y="138" width="9" height="34" />
-          <rect x="34" y="156" width="11" height="16" />
-          <rect x="120" y="152" width="12" height="20" />
-          <rect x="135" y="143" width="10" height="29" />
-          <rect x="150" y="150" width="14" height="22" />
-          <rect x="168" y="136" width="11" height="36" />
-          <rect x="223" y="154" width="10" height="18" />
-          <rect x="238" y="146" width="13" height="26" />
-          <rect x="256" y="140" width="11" height="32" />
-          <rect x="272" y="151" width="14" height="21" />
-          <rect x="290" y="134" width="10" height="38" />
-          <rect x="356" y="148" width="11" height="24" />
-          <rect x="372" y="140" width="16" height="32" />
-          <rect x="390" y="152" width="9" height="20" />
-        </g>
-        <g opacity="0.10" stroke="currentColor" strokeWidth="1" strokeLinecap="round">
-          <path d="M10 188h16M32 188h10M8 200h20M14 212h12M6 224h18M360 186h18M384 186h10M366 198h20M372 210h14M362 222h20" />
-        </g>
-        <g opacity="0.14" stroke="currentColor" strokeWidth="1.2" strokeLinejoin="round" strokeLinecap="round">
-          <path d="M0 171h214M0 177h214" />
-          <path d="M6 171l32 6M38 171 6 177M38 171l32 6M70 171l-32 6M70 171l32 6M102 171l-32 6M102 171l32 6M134 171l-32 6M134 171l32 6M166 171l-32 6M166 171l32 6M198 171l-32 6" />
-          <path d="M100 178v-78M126 178v-78M96 100h34M100 100l13-10 13 10" />
-          <path d="M100 150l26-18M126 150l-26-18M100 132l26-18M126 132l-26-18" />
-          <path d="M113 92 16 171M113 92l97 79" />
-        </g>
-        <g opacity="0.22" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round">
-          <path d="M50 172 60 52l10 120M60 172V52M46 56h28" />
-          <path d="M336 172 346 20l10 152M346 172V20M332 24h28" />
-          <path d="M60 52q140 8 286-32" />
-          <path d="M60 52-6 78M346 20l62 20" />
-        </g>
-        <g opacity="0.13" stroke="currentColor" strokeWidth="1" strokeLinecap="round">
-          <path d="M60 56q140 10 286-32" />
-        </g>
-        <g className="smart-tram">
-          <circle cx="286" cy="34" r="2.4" fill="currentColor" opacity="0.5" />
-          <path d="M286 35v7" stroke="currentColor" strokeWidth="1.3" opacity="0.5" />
-          <rect x="269" y="42" width="34" height="21" rx="6" fill="var(--smart-accent)" />
-          <rect x="272" y="42" width="28" height="3.3" rx="1.5" fill="#000" opacity="0.14" />
-          <rect x="274" y="48" width="24" height="8.5" rx="2" fill="#FFF" opacity="0.5" />
-          <path d="M286 48v8.5" stroke="var(--smart-accent)" strokeWidth="1.4" />
-        </g>
-      </svg>
     </div>
   );
 }

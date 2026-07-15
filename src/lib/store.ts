@@ -19,6 +19,9 @@ import type {
 export interface Session {
   token: string;
   userId: string;
+  /** Per-visit tracker id shown in Sheet2 alongside the user's name. */
+  trackerSessionId?: string;
+  displayName?: string;
   createdAt: number;
   expiresAt: number;
 }
