@@ -3,7 +3,6 @@ import { audit, db, seed } from "@/lib/store";
 import { LIMITS, canAccessDrawer, clientIp, rateLimit } from "@/lib/security";
 import { currentUser } from "@/lib/session";
 import { drawerView } from "@/lib/dto";
-import { pullStockFromSheets } from "@/lib/sheets";
 
 // GET /api/drawers/{id} — resolve drawer metadata + live stock (PRD §B.2 step 3).
 // Accepts an opaque id or the printed short code (manual fallback, §B.2 step 4).
@@ -20,7 +19,9 @@ export async function GET(
   const user = await currentUser();
   if (!user) return NextResponse.json({ error: "unauthenticated" }, { status: 401 });
 
-  await pullStockFromSheets({ force: true });
+  // Fast resolve only — do not await Sheets here. Scan → check-in used to pay
+  // for a full inventory pull before the menu, then pull again on /drawers.
+  // Live Part/Qty comes from the list endpoint + Refresh / mutations.
 
   // Throttle lookups to make enumeration impractical (§5.1).
   const gate = rateLimit(`lookup:${user.id}`, LIMITS.lookup.limit, LIMITS.lookup.windowMs);

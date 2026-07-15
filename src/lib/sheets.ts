@@ -17,7 +17,9 @@ import type { Drawer } from "./types";
 const WEBHOOK_URL = process.env.SHEETS_WEBHOOK_URL;
 const SECRET = process.env.SHEETS_SECRET;
 
-const PULL_CACHE_MS = 0; // no in-process cache — Vercel isolates don't share memory
+// Warm reuse within one Fluid instance. Isolates don't share memory across
+ // instances, but this still cuts back-to-back pulls after check-in / open.
+const PULL_CACHE_MS = 20_000;
 let lastPullAt = 0;
 let lastPullOk = false;
 
@@ -50,13 +52,17 @@ export interface SheetDrawerRow {
   locked: boolean;
 }
 
-async function postToSheets(payload: Record<string, unknown>): Promise<Response | null> {
+async function postToSheets(
+  payload: Record<string, unknown>,
+  opts?: { timeoutMs?: number },
+): Promise<Response | null> {
   if (!sheetsEnabled()) return null;
 
   try {
     const ctrl = new AbortController();
     // Apps Script cold starts are often 5–15s from serverless hosts.
-    const timer = setTimeout(() => ctrl.abort(), 25000);
+    const timeoutMs = opts?.timeoutMs ?? 25000;
+    const timer = setTimeout(() => ctrl.abort(), timeoutMs);
     const body = JSON.stringify(payload);
     const headers = { "Content-Type": "text/plain;charset=utf-8" };
 
@@ -181,6 +187,7 @@ export async function logSessionRow(
  */
 export async function pullStockFromSheets(opts?: {
   force?: boolean;
+  timeoutMs?: number;
 }): Promise<{ ok: boolean; error?: string; count?: number }> {
   if (!sheetsEnabled()) return { ok: false, error: "not_configured" };
   seed();
@@ -190,7 +197,10 @@ export async function pullStockFromSheets(opts?: {
     return { ok: true, count: db.drawers.size };
   }
 
-  const res = await postToSheets({ secret: SECRET, type: "inventory" });
+  const res = await postToSheets(
+    { secret: SECRET, type: "inventory" },
+    { timeoutMs: opts?.timeoutMs },
+  );
   if (!res) {
     audit({ type: "sheets.pull_error", detail: "fetch_failed" });
     lastPullOk = false;

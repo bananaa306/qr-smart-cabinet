@@ -14,7 +14,9 @@ export async function GET() {
   const user = await currentUser();
   if (!user) return NextResponse.json({ error: "unauthenticated" }, { status: 401 });
 
-  await pullStockFromSheets({ force: true });
+  // Soft budget — don't block the menu on a cold Apps Script (25s).
+  // Users can tap Refresh for a full pull; take/return still re-pull before mutate.
+  await pullStockFromSheets({ timeoutMs: 4000 });
 
   const drawers = [...db.drawers.values()]
     .filter((d) => canAccessDrawer(user.id, d.id))

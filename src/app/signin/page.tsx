@@ -27,6 +27,13 @@ function SignInFallback() {
   );
 }
 
+function safeNextPath(raw: string | undefined): string | null {
+  if (!raw || !raw.startsWith("/") || raw.startsWith("//")) return null;
+  const deep = raw.match(/^\/d\/([^/?#]+)/i);
+  if (deep) return `/drawers?open=${encodeURIComponent(decodeURIComponent(deep[1]))}`;
+  return raw;
+}
+
 export default async function SignIn({
   searchParams,
 }: {
@@ -35,11 +42,7 @@ export default async function SignIn({
   const user = await currentUser();
   const params = await searchParams;
   if (user) {
-    const next = params.next;
-    if (next && next.startsWith("/") && !next.startsWith("//")) {
-      redirect(next);
-    }
-    redirect("/drawers");
+    redirect(safeNextPath(params.next) ?? "/drawers");
   }
   return (
     <Suspense fallback={<SignInFallback />}>

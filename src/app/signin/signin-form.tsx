@@ -12,6 +12,10 @@ import { api } from "@/lib/client";
 
 function safeNextPath(raw: string | null): string {
   if (!raw || !raw.startsWith("/") || raw.startsWith("//")) return "/drawers";
+  // After check-in, skip /d/[id] round-trip (and its loading screen) —
+  // open the drawer directly in the menu.
+  const deep = raw.match(/^\/d\/([^/?#]+)/i);
+  if (deep) return `/drawers?open=${encodeURIComponent(decodeURIComponent(deep[1]))}`;
   return raw;
 }
 
@@ -39,12 +43,12 @@ export function SignInForm() {
       method: "POST",
       body: JSON.stringify({ name: trimmed }),
     });
-    setWorking(false);
 
     if (ok) {
       router.replace(safeNextPath(searchParams.get("next")));
       return;
     }
+    setWorking(false);
     if (status === 429) {
       setError("Too many attempts. Wait a moment and try again.");
       return;

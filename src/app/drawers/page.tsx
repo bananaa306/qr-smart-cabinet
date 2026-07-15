@@ -159,15 +159,36 @@ function DrawersPageInner() {
     // eslint-disable-next-line react-hooks/exhaustive-deps -- mount load
   }, [router]);
 
-  // QR / deep-link: /drawers?open=<id> opens that drawer in the espresso UI.
+  // QR / deep-link: /drawers?open=<id|shortCode> opens that drawer.
   useEffect(() => {
     if (!drawers || !openParam || openedFromScan.current) return;
     const key = openParam.trim();
-    const idx = drawers.findIndex((d) => d.id === key);
-    if (idx < 0) return;
-    openedFromScan.current = true;
-    openDrawer(idx);
-    router.replace("/drawers", { scroll: false });
+    if (!key) return;
+
+    const localIdx = drawers.findIndex((d) => d.id === key);
+    if (localIdx >= 0) {
+      openedFromScan.current = true;
+      openDrawer(localIdx);
+      router.replace("/drawers", { scroll: false });
+      return;
+    }
+
+    let cancelled = false;
+    void (async () => {
+      const { ok, data } = await api<{ drawer: DrawerView }>(
+        `/api/drawers/${encodeURIComponent(key)}`,
+      );
+      if (cancelled || !ok || !data.drawer) return;
+      const idx = drawers.findIndex((d) => d.id === data.drawer.id);
+      if (idx < 0) return;
+      openedFromScan.current = true;
+      openDrawer(idx);
+      router.replace("/drawers", { scroll: false });
+    })();
+
+    return () => {
+      cancelled = true;
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps -- open once from scan
   }, [drawers, openParam]);
 
