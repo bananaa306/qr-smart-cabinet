@@ -107,7 +107,7 @@ export function SessionChip({ name }: { name: string }) {
         onClick={signOut}
         disabled={working}
       >
-        {working ? "Signing out…" : "Sign out"}
+        {working ? "Signing out…" : "Wrong name? Sign out"}
       </button>
     </div>
   );

@@ -224,7 +224,7 @@ body.smart-root {
   position: relative;
   z-index: 1;
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   justify-content: space-between;
   gap: 10px;
   padding: 20px 20px 12px;
@@ -1346,10 +1346,10 @@ body.smart-root {
 
 .smart-session-chip {
   display: flex;
-  max-width: 46%;
+  max-width: 52%;
   flex-direction: column;
   align-items: flex-end;
-  gap: 2px;
+  gap: 4px;
   text-align: right;
 }
 
@@ -1373,22 +1373,25 @@ body.smart-root {
 }
 
 .smart-sign-out {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 28px;
   margin-top: 2px;
-  padding: 0;
-  border: none;
-  background: transparent;
-  color: var(--smart-sub);
+  border: 1px solid color-mix(in srgb, var(--smart-accent) 55%, var(--smart-panel-border));
+  border-radius: 999px;
+  padding: 0 10px;
+  background: color-mix(in srgb, var(--smart-accent) 14%, transparent);
+  color: var(--smart-ink);
   font-size: 11px;
   font-weight: 700;
-  letter-spacing: 0.04em;
-  text-decoration: underline;
-  text-decoration-color: color-mix(in srgb, var(--smart-sub) 45%, transparent);
-  text-underline-offset: 3px;
+  letter-spacing: 0.02em;
+  white-space: nowrap;
   cursor: pointer;
 }
 
 .smart-sign-out:hover:not(:disabled) {
-  color: var(--smart-ink);
+  background: color-mix(in srgb, var(--smart-accent) 28%, transparent);
 }
 
 .smart-sign-out:disabled {
