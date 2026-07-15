@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { after } from "next/server";
 import { db, seed } from "@/lib/store";
 import { canAccessDrawer } from "@/lib/security";
 import { currentUser } from "@/lib/session";
@@ -14,15 +15,24 @@ export async function GET() {
   const user = await currentUser();
   if (!user) return NextResponse.json({ error: "unauthenticated" }, { status: 401 });
 
-  // Soft budget — don't block the menu on a cold Apps Script (25s).
-  // Users can tap Refresh for a full pull; take/return still re-pull before mutate.
-  await pullStockFromSheets({ timeoutMs: 4000 });
+  // Never stall the menu on a cold Apps Script. Give a warm script ~1s;
+  // if it misses, serve current store data and finish the pull after the
+  // response (Fluid / Node) so the next paint / soft-refresh is correct.
+  const quick = await pullStockFromSheets({ timeoutMs: 1000 });
+  if (!quick.ok && sheetsEnabled()) {
+    after(() => {
+      void pullStockFromSheets({ force: true, timeoutMs: 20000 });
+    });
+  }
 
   const drawers = [...db.drawers.values()]
     .filter((d) => canAccessDrawer(user.id, d.id))
     .map((d) => drawerView(d, db.stock.get(d.id)!))
-    // stable order by short code so the 3×3 grid is deterministic
     .sort((a, b) => a.label.localeCompare(b.label, undefined, { numeric: true }));
 
-  return NextResponse.json({ drawers, sheets: sheetsEnabled() });
+  return NextResponse.json({
+    drawers,
+    sheets: sheetsEnabled(),
+    sheetsFresh: quick.ok,
+  });
 }

@@ -89,8 +89,8 @@ export async function POST(
     return NextResponse.json({ error: "drawer_disabled" }, { status: 409 });
   }
 
-  // Prefer sheet stock over this isolate's seed quantities.
-  await pullStockFromSheets({ force: true });
+  // Prefer sheet stock, but don't block take/return on a cold script forever.
+  await pullStockFromSheets({ force: true, timeoutMs: 8000 });
 
   const stock = db.stock.get(drawer.id)!;
 

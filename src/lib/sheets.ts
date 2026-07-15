@@ -4,24 +4,25 @@ import type { Drawer } from "./types";
 // ---------------------------------------------------------------------------
 // Google Sheets inventory + session tracker.
 //
-// Inventory sheet is authoritative for Part / Quantity / Is Locked. The app
-// pulls those values before list/detail and before take/return. Take/return
-// patches Quantity only (never Part or Locked). Session tracker rows are
-// append-only. Full inventory snapshots are disabled.
+// The Apps Script Web App is the slow hop (cold starts ~5–15s). We mitigate by:
+//   • short in-process cache + in-flight dedupe
+//   • brief timeouts on menu reads (UI never waits for a cold script)
+//   • cron warmup hitting this same path to keep the script warm
 //
-// Configured entirely by env — if either var is missing sheets are a no-op:
-//   SHEETS_WEBHOOK_URL   the deployed Apps Script Web App /exec URL
+// Config:
+//   SHEETS_WEBHOOK_URL   deployed Apps Script Web App /exec URL
 //   SHEETS_SECRET        shared secret checked by the script
 // ---------------------------------------------------------------------------
 
 const WEBHOOK_URL = process.env.SHEETS_WEBHOOK_URL;
 const SECRET = process.env.SHEETS_SECRET;
 
-// Warm reuse within one Fluid instance. Isolates don't share memory across
- // instances, but this still cuts back-to-back pulls after check-in / open.
-const PULL_CACHE_MS = 20_000;
+/** Reuse a successful pull within the same Fluid instance. */
+const PULL_CACHE_MS = 30_000;
 let lastPullAt = 0;
 let lastPullOk = false;
+let inflightPull: Promise<{ ok: boolean; error?: string; count?: number }> | null =
+  null;
 
 export type SessionAction =
   | "Lock"
@@ -60,8 +61,7 @@ async function postToSheets(
 
   try {
     const ctrl = new AbortController();
-    // Apps Script cold starts are often 5–15s from serverless hosts.
-    const timeoutMs = opts?.timeoutMs ?? 25000;
+    const timeoutMs = opts?.timeoutMs ?? 20000;
     const timer = setTimeout(() => ctrl.abort(), timeoutMs);
     const body = JSON.stringify(payload);
     const headers = { "Content-Type": "text/plain;charset=utf-8" };
@@ -85,7 +85,6 @@ async function postToSheets(
           redirect: "follow",
         });
       } else {
-        // Location stripped — fall back to automatic redirect follow.
         res = await fetch(WEBHOOK_URL!, {
           method: "POST",
           headers,
@@ -110,7 +109,6 @@ function parseSheetsJson(text: string): unknown {
   try {
     return JSON.parse(trimmed);
   } catch {
-    // Recover if Google wraps JSON in HTML or junk.
     const start = trimmed.indexOf("{");
     const end = trimmed.lastIndexOf("}");
     if (start >= 0 && end > start) {
@@ -121,7 +119,7 @@ function parseSheetsJson(text: string): unknown {
 }
 
 async function postOk(payload: Record<string, unknown>): Promise<boolean> {
-  const res = await postToSheets(payload);
+  const res = await postToSheets(payload, { timeoutMs: 20000 });
   if (!res) return false;
   try {
     const text = await res.text();
@@ -142,9 +140,6 @@ function drawerNumber(drawer: Drawer): number {
   return parseInt(drawer.label.replace(/[^0-9]/g, ""), 10) || 0;
 }
 
-// ---------------------------------------------------------------------------
-// Session tracker: Name | Time | Session ID | Action | Part | Shelf | Quantity | Locked?
-// ---------------------------------------------------------------------------
 export async function logSessionRow(
   row: SessionRow,
   action: "append" | "update" = "append",
@@ -181,22 +176,10 @@ export async function logSessionRow(
   });
 }
 
-/**
- * Pull inventory from the sheet into the in-memory store.
- * Drawer numbers in the sheet match "Drawer N" labels (column Drawer / #).
- */
-export async function pullStockFromSheets(opts?: {
+async function pullOnce(opts?: {
   force?: boolean;
   timeoutMs?: number;
 }): Promise<{ ok: boolean; error?: string; count?: number }> {
-  if (!sheetsEnabled()) return { ok: false, error: "not_configured" };
-  seed();
-
-  const now = Date.now();
-  if (!opts?.force && lastPullOk && now - lastPullAt < PULL_CACHE_MS) {
-    return { ok: true, count: db.drawers.size };
-  }
-
   const res = await postToSheets(
     { secret: SECRET, type: "inventory" },
     { timeoutMs: opts?.timeoutMs },
@@ -252,6 +235,45 @@ export async function pullStockFromSheets(opts?: {
   return { ok: true, count: rows.length };
 }
 
+/**
+ * Pull inventory from the sheet into the in-memory store.
+ * Concurrent callers share one in-flight request.
+ */
+export async function pullStockFromSheets(opts?: {
+  force?: boolean;
+  timeoutMs?: number;
+}): Promise<{ ok: boolean; error?: string; count?: number }> {
+  if (!sheetsEnabled()) return { ok: false, error: "not_configured" };
+  seed();
+
+  const now = Date.now();
+  if (!opts?.force && lastPullOk && now - lastPullAt < PULL_CACHE_MS) {
+    return { ok: true, count: db.drawers.size };
+  }
+
+  if (inflightPull) {
+    const shared = await inflightPull;
+    if (shared.ok && !opts?.force) return shared;
+    if (shared.ok && opts?.force && Date.now() - lastPullAt < 2_000) {
+      return shared;
+    }
+  }
+
+  const run = pullOnce(opts).finally(() => {
+    if (inflightPull === run) inflightPull = null;
+  });
+  inflightPull = run;
+  return run;
+}
+
+/** Lightweight ping used by cron to keep Apps Script warm. */
+export async function warmSheets(): Promise<{ ok: boolean; error?: string; ms: number }> {
+  if (!sheetsEnabled()) return { ok: false, error: "not_configured", ms: 0 };
+  const started = Date.now();
+  const result = await pullStockFromSheets({ force: true, timeoutMs: 20000 });
+  return { ok: result.ok, error: result.error, ms: Date.now() - started };
+}
+
 function applySheetRowsToStore(rows: SheetDrawerRow[]) {
   const byNumber = new Map<number, Drawer>();
   for (const d of db.drawers.values()) {
@@ -274,7 +296,6 @@ function applySheetRowsToStore(rows: SheetDrawerRow[]) {
       stock.version += 1;
     }
 
-    // Part names can arrive as non-strings from Sheets JSON — coerce always.
     const part = String(row.part ?? "").trim();
     if (part) {
       const item = db.items.get(drawer.itemId);
@@ -283,7 +304,6 @@ function applySheetRowsToStore(rows: SheetDrawerRow[]) {
       }
     }
 
-    // Locked column is owned by the sheet — mirror it into the open-map.
     if (row.locked) {
       db.openDrawer.delete(drawer.id);
     } else if (!db.openDrawer.has(drawer.id)) {
@@ -324,7 +344,7 @@ export async function syncSheet(): Promise<{
   parts?: string[];
 }> {
   if (!sheetsEnabled()) return { ok: false, error: "not_configured" };
-  const result = await pullStockFromSheets({ force: true });
+  const result = await pullStockFromSheets({ force: true, timeoutMs: 20000 });
   if (!result.ok) return { ok: false, error: result.error ?? "pull_failed" };
 
   const parts = [...db.drawers.values()]
@@ -339,4 +359,9 @@ export async function syncSheet(): Promise<{
 
 export function sheetsEnabled(): boolean {
   return Boolean(WEBHOOK_URL && SECRET);
+}
+
+export function sheetsCacheAgeMs(): number | null {
+  if (!lastPullOk || !lastPullAt) return null;
+  return Date.now() - lastPullAt;
 }

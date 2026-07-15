@@ -52,3 +52,20 @@ Drawer numbers must match app labels (`Drawer 1` → `1`).
 
 Sheets is fine as shared workshop inventory. It is not a transactional DB. For
 strong concurrency, use PostgreSQL later and keep Sheets as ops UI.
+
+### Latency
+
+The Apps Script **Web App** cold-starts slowly (often 5–15s). The app mitigates this:
+
+1. **Menu load** waits ≤1s for Sheets, then returns immediately and finishes the
+   pull in the background; the drawers page soft-refreshes once after ~2s.
+2. **In-flight dedupe + 30s cache** so concurrent requests don’t pile on.
+3. **Cron warmup** (`/api/sheets/warmup` every 5 minutes via `vercel.json`) pings
+   Apps Script so it stays warm during workshop hours.
+
+Optional: set `CRON_SECRET` in Vercel and Vercel will send it automatically on
+cron invocations.
+
+For near–real-time reads without Apps Script delay, switch later to the
+**Google Sheets API** with a service account (typical ~200–500ms). That needs
+service-account JSON in Vercel env and sheet sharing with the SA email.

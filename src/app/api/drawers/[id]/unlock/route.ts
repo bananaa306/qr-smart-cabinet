@@ -70,7 +70,7 @@ export async function POST(
     return NextResponse.json({ error: "drawer_disabled" }, { status: 409 });
   }
 
-  await pullStockFromSheets();
+  await pullStockFromSheets({ timeoutMs: 1000 });
 
   if (db.openDrawer.has(drawer.id)) {
     const stock = db.stock.get(drawer.id)!;

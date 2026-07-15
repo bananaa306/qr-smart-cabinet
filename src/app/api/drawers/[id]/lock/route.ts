@@ -27,7 +27,7 @@ export async function POST(
     return NextResponse.json({ error: "not_found" }, { status: 404 });
   }
 
-  await pullStockFromSheets();
+  await pullStockFromSheets({ timeoutMs: 1000 });
 
   const stock = db.stock.get(drawer.id)!;
   const item = db.items.get(drawer.itemId);

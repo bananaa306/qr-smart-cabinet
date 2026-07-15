@@ -1,0 +1,8 @@
+{
+  "crons": [
+    {
+      "path": "/api/sheets/warmup",
+      "schedule": "*/5 * * * *"
+    }
+  ]
+}

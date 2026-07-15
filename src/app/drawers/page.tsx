@@ -135,9 +135,11 @@ function DrawersPageInner() {
   const DETAIL_REVEAL_DELAY_MS = 320;
 
   async function loadCabinet() {
-    const { ok, status, data } = await api<{ drawers: DrawerView[]; sheets: boolean }>(
-      "/api/drawers",
-    );
+    const { ok, status, data } = await api<{
+      drawers: DrawerView[];
+      sheets: boolean;
+      sheetsFresh?: boolean;
+    }>("/api/drawers");
     if (status === 401) {
       router.replace("/signin");
       return null;
@@ -152,10 +154,22 @@ function DrawersPageInner() {
   }
 
   useEffect(() => {
-    void loadCabinet();
+    let cancelled = false;
+    void (async () => {
+      const first = await loadCabinet();
+      if (cancelled || first === null) return;
+      // If the first paint raced a cold Apps Script, silently re-pull once
+      // after the background finish likely landed.
+      await new Promise((r) => setTimeout(r, 2200));
+      if (cancelled) return;
+      await loadCabinet();
+    })();
     api<{ user: { name: string } | null }>("/api/auth/me").then(({ ok, data }) => {
       if (ok && data.user?.name) setSessionName(data.user.name);
     });
+    return () => {
+      cancelled = true;
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps -- mount load
   }, [router]);
 
