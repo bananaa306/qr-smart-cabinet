@@ -51,6 +51,8 @@ interface DB {
   openDrawer: Map<string, string>; // drawerId -> unlockSessionId (one at a time)
   drawerCooldown: Map<string, number>; // drawerId -> earliest next-open ts
   sessions: Map<string, Session>;
+  /** Signed-session jtis invalidated by logout (best-effort per isolate). */
+  revokedSessions: Set<string>;
   otps: Map<string, OtpChallenge>; // key: email
   rateBuckets: Map<string, Bucket>;
   idempotency: Map<string, unknown>; // key: userId:idempotencyKey
@@ -71,6 +73,7 @@ function freshDB(): DB {
     openDrawer: new Map(),
     drawerCooldown: new Map(),
     sessions: new Map(),
+    revokedSessions: new Set(),
     otps: new Map(),
     rateBuckets: new Map(),
     idempotency: new Map(),
