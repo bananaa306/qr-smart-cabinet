@@ -292,12 +292,17 @@ function SyncBar({
 
       if (!sync.data?.ok) {
         setState("err");
+        const err = sync.data?.error ?? "pull_failed";
         setHint(
-          sync.data?.error === "pull_failed"
-            ? "Sheet pull failed — redeploy Apps Script"
-            : sync.data?.error === "not_configured"
-              ? "Sheets env vars missing on host"
-              : "Sheet pull failed",
+          err === "not_configured"
+            ? "Sheets env vars missing on host"
+            : err === "forbidden"
+              ? "Sheets SECRET mismatch — check Script Properties"
+              : err === "unknown_type"
+                ? "Old Apps Script — paste Code.gs + New version deploy"
+                : err.startsWith("http_") || err === "fetch_failed"
+                  ? "Can’t reach Apps Script — check /exec URL"
+                  : `Sheet pull failed (${err})`,
         );
       } else {
         setState("ok");

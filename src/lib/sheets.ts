@@ -130,20 +130,20 @@ export async function logSessionRow(
  */
 export async function pullStockFromSheets(opts?: {
   force?: boolean;
-}): Promise<boolean> {
-  if (!sheetsEnabled()) return false;
+}): Promise<{ ok: boolean; error?: string; count?: number }> {
+  if (!sheetsEnabled()) return { ok: false, error: "not_configured" };
   seed();
 
   const now = Date.now();
   if (!opts?.force && lastPullOk && now - lastPullAt < PULL_CACHE_MS) {
-    return true;
+    return { ok: true, count: db.drawers.size };
   }
 
   const res = await postToSheets({ secret: SECRET, type: "inventory" });
   if (!res) {
     audit({ type: "sheets.pull_error", detail: "fetch_failed" });
     lastPullOk = false;
-    return false;
+    return { ok: false, error: "fetch_failed" };
   }
 
   let text = "";
@@ -152,7 +152,7 @@ export async function pullStockFromSheets(opts?: {
   } catch {
     audit({ type: "sheets.pull_error", detail: "read_body_failed" });
     lastPullOk = false;
-    return false;
+    return { ok: false, error: "read_body_failed" };
   }
 
   let body: { drawers?: SheetDrawerRow[]; error?: string; ok?: boolean };
@@ -164,19 +164,19 @@ export async function pullStockFromSheets(opts?: {
       detail: `invalid_json http_${res.status} ${text.slice(0, 120)}`,
     });
     lastPullOk = false;
-    return false;
+    return { ok: false, error: `invalid_json` };
   }
 
   if (body.error) {
     audit({ type: "sheets.pull_error", detail: String(body.error) });
     lastPullOk = false;
-    return false;
+    return { ok: false, error: String(body.error) };
   }
 
   if (!res.ok) {
     audit({ type: "sheets.pull_error", detail: `http ${res.status}` });
     lastPullOk = false;
-    return false;
+    return { ok: false, error: `http_${res.status}` };
   }
 
   const rows = Array.isArray(body.drawers) ? body.drawers : [];
@@ -184,7 +184,7 @@ export async function pullStockFromSheets(opts?: {
   lastPullAt = Date.now();
   lastPullOk = true;
   audit({ type: "sheets.pull_ok", detail: `${rows.length} drawers` });
-  return true;
+  return { ok: true, count: rows.length };
 }
 
 function applySheetRowsToStore(rows: SheetDrawerRow[]) {
@@ -259,8 +259,8 @@ export async function syncSheet(): Promise<{
   parts?: string[];
 }> {
   if (!sheetsEnabled()) return { ok: false, error: "not_configured" };
-  const ok = await pullStockFromSheets({ force: true });
-  if (!ok) return { ok: false, error: "pull_failed" };
+  const result = await pullStockFromSheets({ force: true });
+  if (!result.ok) return { ok: false, error: result.error ?? "pull_failed" };
 
   const parts = [...db.drawers.values()]
     .sort((a, b) => a.label.localeCompare(b.label, undefined, { numeric: true }))
@@ -269,7 +269,7 @@ export async function syncSheet(): Promise<{
       return `${d.label}: ${item?.name ?? "?"}`;
     });
 
-  return { ok: true, count: parts.length, parts };
+  return { ok: true, count: result.count ?? parts.length, parts };
 }
 
 export function sheetsEnabled(): boolean {
