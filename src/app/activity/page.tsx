@@ -6,6 +6,7 @@ import {
   BottomTabs,
   buildSmartScreenStyle,
   RooseveltIslandScene,
+  SessionChip,
   SMART_ACCENT,
   smartEspressoTheme,
 } from "@/components/smart-shell";
@@ -55,12 +56,7 @@ export default function ActivityPage() {
               <div className="smart-eyebrow">NYC FIRST</div>
               <h1>My activity</h1>
             </div>
-            {sessionName && (
-              <div className="smart-session-chip" title={`Signed in as ${sessionName}`}>
-                <span>Signed in</span>
-                <b>{sessionName}</b>
-              </div>
-            )}
+            {sessionName && <SessionChip name={sessionName} />}
           </header>
 
           <div className="smart-activity-content">

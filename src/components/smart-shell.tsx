@@ -1,6 +1,7 @@
 "use client";
 
 import { useRouter } from "next/navigation";
+import { useState } from "react";
 
 export const SMART_ACCENT = "#CF2233";
 
@@ -77,6 +78,38 @@ export function BottomTabs({
         <b style={active === "activity" ? { color: accent } : undefined}>My activity</b>
       </button>
     </nav>
+  );
+}
+
+/** Header chip: signed-in name + sign out (return to name check-in). */
+export function SessionChip({ name }: { name: string }) {
+  const router = useRouter();
+  const [working, setWorking] = useState(false);
+
+  async function signOut() {
+    if (working) return;
+    setWorking(true);
+    try {
+      await fetch("/api/auth/logout", { method: "POST", credentials: "include" });
+    } catch {
+      /* still bounce to check-in */
+    }
+    router.replace("/signin");
+  }
+
+  return (
+    <div className="smart-session-chip" title={`Signed in as ${name}`}>
+      <span>Signed in</span>
+      <b>{name}</b>
+      <button
+        type="button"
+        className="smart-sign-out"
+        onClick={signOut}
+        disabled={working}
+      >
+        {working ? "Signing out…" : "Sign out"}
+      </button>
+    </div>
   );
 }
 
@@ -206,7 +239,7 @@ export function RooseveltIslandScene() {
         */}
         <g className="smart-watcher" opacity="0.38" fill="currentColor">
           {/* head */}
-          <circle cx="201" cy="483" r="9" />
+          <circle cx="201" cy="48" r="9" />
           {/* torso */}
           <rect x="192" y="492" width="18" height="28" rx="7" />
           {/* left arm resting on lap */}

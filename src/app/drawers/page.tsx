@@ -6,6 +6,7 @@ import {
   BottomTabs,
   buildSmartScreenStyle,
   RooseveltIslandScene,
+  SessionChip,
   SMART_ACCENT,
   smartEspressoTheme,
 } from "@/components/smart-shell";
@@ -278,12 +279,7 @@ function DrawersPageInner() {
               <div className="smart-eyebrow">NYC FIRST</div>
               <h1>Smart Cabinet</h1>
             </div>
-            {sessionName && (
-              <div className="smart-session-chip" title={`Signed in as ${sessionName}`}>
-                <span>Signed in</span>
-                <b>{sessionName}</b>
-              </div>
-            )}
+            {sessionName && <SessionChip name={sessionName} />}
           </header>
 
           <SyncBar
