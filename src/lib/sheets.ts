@@ -55,7 +55,8 @@ async function postToSheets(payload: Record<string, unknown>): Promise<Response 
 
   try {
     const ctrl = new AbortController();
-    const timer = setTimeout(() => ctrl.abort(), 8000);
+    // Apps Script cold starts are often 5–15s from serverless hosts.
+    const timer = setTimeout(() => ctrl.abort(), 25000);
     const res = await fetch(WEBHOOK_URL!, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -139,17 +140,41 @@ export async function pullStockFromSheets(opts?: {
   }
 
   const res = await postToSheets({ secret: SECRET, type: "inventory" });
-  if (!res?.ok) {
-    audit({ type: "sheets.pull_error", detail: res ? `http ${res.status}` : "fetch_failed" });
+  if (!res) {
+    audit({ type: "sheets.pull_error", detail: "fetch_failed" });
     lastPullOk = false;
     return false;
   }
 
-  let body: { drawers?: SheetDrawerRow[] };
+  let text = "";
   try {
-    body = (await res.json()) as { drawers?: SheetDrawerRow[] };
+    text = await res.text();
   } catch {
-    audit({ type: "sheets.pull_error", detail: "invalid_json" });
+    audit({ type: "sheets.pull_error", detail: "read_body_failed" });
+    lastPullOk = false;
+    return false;
+  }
+
+  let body: { drawers?: SheetDrawerRow[]; error?: string; ok?: boolean };
+  try {
+    body = JSON.parse(text) as { drawers?: SheetDrawerRow[]; error?: string; ok?: boolean };
+  } catch {
+    audit({
+      type: "sheets.pull_error",
+      detail: `invalid_json http_${res.status} ${text.slice(0, 120)}`,
+    });
+    lastPullOk = false;
+    return false;
+  }
+
+  if (body.error) {
+    audit({ type: "sheets.pull_error", detail: String(body.error) });
+    lastPullOk = false;
+    return false;
+  }
+
+  if (!res.ok) {
+    audit({ type: "sheets.pull_error", detail: `http ${res.status}` });
     lastPullOk = false;
     return false;
   }

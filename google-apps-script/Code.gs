@@ -60,6 +60,25 @@ function doGet() {
   });
 }
 
+/** Accepts 1, "1", "Drawer 1", "1.0", etc. */
+function parseDrawerNumber_(value) {
+  if (typeof value === 'number' && isFinite(value) && value > 0) {
+    return Math.floor(value);
+  }
+  var m = String(value == null ? '' : value).match(/(\d+)/);
+  return m ? parseInt(m[1], 10) : 0;
+}
+
+function parseQuantity_(value) {
+  if (typeof value === 'number' && isFinite(value)) {
+    return value < 0 ? 0 : Math.floor(value);
+  }
+  var m = String(value == null ? '' : value).replace(/,/g, '').match(/\d+(\.\d+)?/);
+  if (!m) return 0;
+  var n = Number(m[0]);
+  return isNaN(n) || n < 0 ? 0 : Math.floor(n);
+}
+
 function readInventory_() {
   var t = locateTable_();
   if (!t) throw new Error('No sheet with a "Part" and "Quantity" header row found.');
@@ -67,11 +86,10 @@ function readInventory_() {
   var drawers = [];
   for (var i = 0; i < t.rows.length; i++) {
     var row = t.rows[i];
-    var number = t.col.drawer ? Number(row[t.col.drawer - 1]) : i + 1;
-    if (!number || isNaN(number)) continue;
+    var number = t.col.drawer ? parseDrawerNumber_(row[t.col.drawer - 1]) : i + 1;
+    if (!number) continue;
     var part = t.col.part ? String(row[t.col.part - 1] || '').trim() : '';
-    var quantity = t.col.quantity ? Number(row[t.col.quantity - 1]) : 0;
-    if (isNaN(quantity) || quantity < 0) quantity = 0;
+    var quantity = t.col.quantity ? parseQuantity_(row[t.col.quantity - 1]) : 0;
     var locked = true;
     if (t.col.locked) {
       var raw = row[t.col.locked - 1];
@@ -164,8 +182,9 @@ function locateTable_() {
 
 function findRowByNumber_(t, number) {
   if (!t.col.drawer) return -1;
+  var target = Number(number);
   for (var i = 0; i < t.rows.length; i++) {
-    if (Number(t.rows[i][t.col.drawer - 1]) === Number(number)) return i;
+    if (parseDrawerNumber_(t.rows[i][t.col.drawer - 1]) === target) return i;
   }
   return -1;
 }

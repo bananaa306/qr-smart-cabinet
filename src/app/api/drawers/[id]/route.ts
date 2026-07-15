@@ -20,7 +20,7 @@ export async function GET(
   const user = await currentUser();
   if (!user) return NextResponse.json({ error: "unauthenticated" }, { status: 401 });
 
-  await pullStockFromSheets();
+  await pullStockFromSheets({ force: true });
 
   // Throttle lookups to make enumeration impractical (§5.1).
   const gate = rateLimit(`lookup:${user.id}`, LIMITS.lookup.limit, LIMITS.lookup.windowMs);

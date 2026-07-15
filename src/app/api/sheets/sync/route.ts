@@ -4,6 +4,7 @@ import { currentUser } from "@/lib/session";
 import { sheetsEnabled, syncSheet } from "@/lib/sheets";
 
 // POST /api/sheets/sync — re-read inventory from Google Sheets (never overwrite).
+// Soft-fails with HTTP 200 so the UI can still refresh drawer cards locally.
 export async function POST() {
   seed();
 
@@ -11,9 +12,9 @@ export async function POST() {
   if (!user) return NextResponse.json({ error: "unauthenticated" }, { status: 401 });
 
   if (!sheetsEnabled()) {
-    return NextResponse.json({ ok: false, error: "not_configured" }, { status: 400 });
+    return NextResponse.json({ ok: false, error: "not_configured" });
   }
 
   const result = await syncSheet();
-  return NextResponse.json(result, { status: result.ok ? 200 : 502 });
+  return NextResponse.json(result);
 }

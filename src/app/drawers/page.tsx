@@ -106,21 +106,29 @@ export default function DrawersPage() {
 
   const DETAIL_REVEAL_DELAY_MS = 320;
 
-  useEffect(() => {
-    api<{ drawers: DrawerView[]; sheets: boolean }>("/api/drawers").then(
-      ({ ok, status, data }) => {
-        if (status === 401) return router.replace("/signin");
-        if (ok) {
-          setDrawers(data.drawers);
-          setSheets(data.sheets);
-        } else {
-          setDrawers([]);
-        }
-      },
+  async function loadCabinet() {
+    const { ok, status, data } = await api<{ drawers: DrawerView[]; sheets: boolean }>(
+      "/api/drawers",
     );
+    if (status === 401) {
+      router.replace("/signin");
+      return null;
+    }
+    if (!ok) {
+      setDrawers([]);
+      return [];
+    }
+    setDrawers(data.drawers);
+    setSheets(data.sheets);
+    return data.drawers;
+  }
+
+  useEffect(() => {
+    void loadCabinet();
     api<{ user: { name: string } | null }>("/api/auth/me").then(({ ok, data }) => {
       if (ok && data.user?.name) setSessionName(data.user.name);
     });
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- mount load
   }, [router]);
 
   const t = smartEspressoTheme;
@@ -129,12 +137,30 @@ export default function DrawersPage() {
   const dotBg = `radial-gradient(${t.dot} 1px, transparent 1.2px)`;
   const detail = detailIdx !== null && drawers ? drawers[detailIdx] : null;
 
+  async function refreshDrawer(id: string) {
+    const { ok, data } = await api<{ drawer: DrawerView }>(
+      `/api/drawers/${encodeURIComponent(id)}`,
+    );
+    if (ok && data.drawer) {
+      updateDrawer(data.drawer);
+      return data.drawer;
+    }
+    return null;
+  }
+
   function openDrawer(i: number) {
     if (openTimer.current) clearTimeout(openTimer.current);
     if (closeTimer.current) clearTimeout(closeTimer.current);
     setDetailIdx(null);
     setDetailPhase("idle");
     setOpenIdx(i);
+
+    const current = drawers?.[i];
+    if (current) {
+      // Pull live Part / Quantity / Locked from the sheet into menu + detail.
+      void refreshDrawer(current.id);
+    }
+
     openTimer.current = setTimeout(() => {
       setDetailIdx(i);
       setDetailPhase("enter");
@@ -152,6 +178,8 @@ export default function DrawersPage() {
       setDetailIdx(null);
       setOpenIdx(null);
       setDetailPhase("idle");
+      // Keep the cabinet menu aligned with the sheet after closing a drawer.
+      void loadCabinet();
     }, 220);
   }
 
@@ -187,6 +215,7 @@ export default function DrawersPage() {
             connected={sheets}
             accent={accent}
             onRefreshed={(next) => setDrawers(next)}
+            reload={loadCabinet}
           />
 
           {drawers === null ? (
@@ -231,24 +260,31 @@ function SyncBar({
   connected,
   accent,
   onRefreshed,
+  reload,
 }: {
   connected: boolean;
   accent: string;
   onRefreshed: (drawers: DrawerView[]) => void;
+  reload: () => Promise<DrawerView[] | null>;
 }) {
   const [state, setState] = useState<"idle" | "syncing" | "ok" | "err">("idle");
 
   async function syncNow() {
     setState("syncing");
-    const sync = await api("/api/sheets/sync", { method: "POST" });
-    if (!sync.ok) {
+    try {
+      // Best-effort sheet pull; cabinet reload is what the UI needs.
+      await api("/api/sheets/sync", { method: "POST" });
+      const next = await reload();
+      if (!next) {
+        setState("err");
+        setTimeout(() => setState("idle"), 2200);
+        return;
+      }
+      onRefreshed(next);
+      setState("ok");
+    } catch {
       setState("err");
-      setTimeout(() => setState("idle"), 2200);
-      return;
     }
-    const list = await api<{ drawers: DrawerView[] }>("/api/drawers");
-    if (list.ok) onRefreshed(list.data.drawers);
-    setState("ok");
     setTimeout(() => setState("idle"), 2200);
   }
 
@@ -479,6 +515,14 @@ function DrawerDetail({
     idemKey.current = uuid();
     lockIdemKey.current = uuid();
   }, [drawer?.id]);
+
+  // Keep detail panel in sync when sheet refresh updates qty / locked / name.
+  useEffect(() => {
+    if (!drawer) return;
+    if (mode === "take") {
+      setQty((q) => Math.min(q, Math.max(drawer.quantity, 1)));
+    }
+  }, [drawer?.quantity, drawer?.item.name, mode, drawer]);
 
   useEffect(() => {
     if (lockWorking || dragRef.current?.dragging) return;
