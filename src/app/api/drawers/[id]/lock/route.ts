@@ -3,7 +3,7 @@ import { audit, db, seed } from "@/lib/store";
 import { LIMITS, canAccessDrawer } from "@/lib/security";
 import { currentSession } from "@/lib/session";
 import { drawerView } from "@/lib/dto";
-import { logSessionRow, pullStockFromSheets, syncSheet } from "@/lib/sheets";
+import { logSessionRow, pullStockFromSheets } from "@/lib/sheets";
 
 // POST /api/drawers/{id}/lock — physical lock (no stock mutation).
 export async function POST(
@@ -50,22 +50,19 @@ export async function POST(
   }
   audit({ type: "lock.relocked_by_user", userId: user.id, drawerId: drawer.id });
 
-  await Promise.all([
-    syncSheet(),
-    // Merge into latest Take/Return for this session+part when possible → "Take + Lock"
-    logSessionRow(
-      {
-        name: visit.displayName,
-        sessionId: visit.trackerSessionId,
-        action: "Lock",
-        part: partName,
-        shelf: drawer.label,
-        quantity: unlockSession?.quantity || 0,
-        locked: true,
-      },
-      "update",
-    ),
-  ]);
+  // Session tracker only — inventory Locked column stays sheet-owned.
+  await logSessionRow(
+    {
+      name: visit.displayName,
+      sessionId: visit.trackerSessionId,
+      action: "Lock",
+      part: partName,
+      shelf: drawer.label,
+      quantity: unlockSession?.quantity || 0,
+      locked: true,
+    },
+    "update",
+  );
 
   return NextResponse.json({ ok: true, locked: true, drawer: drawerView(drawer, stock) });
 }

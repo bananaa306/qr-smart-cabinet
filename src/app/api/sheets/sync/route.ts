@@ -3,8 +3,7 @@ import { seed } from "@/lib/store";
 import { currentUser } from "@/lib/session";
 import { sheetsEnabled, syncSheet } from "@/lib/sheets";
 
-// POST /api/sheets/sync — push the current state of all drawers to the Google
-// Sheet on demand (the "Sync now" button). Auth-gated like everything else.
+// POST /api/sheets/sync — re-read inventory from Google Sheets (never overwrite).
 export async function POST() {
   seed();
 

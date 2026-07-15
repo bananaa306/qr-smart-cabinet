@@ -1,20 +1,19 @@
 /**
- * QR Smart Cabinet — Google Sheets live inventory sync.
+ * QR Smart Cabinet — Google Sheets inventory (sheet is source of truth).
  *
  * Paste this into your spreadsheet's Apps Script (Extensions → Apps Script),
  * set a Script Property named SECRET, then deploy as a Web App
  * (Execute as: Me · Who has access: Anyone). Put the /exec URL in
  * SHEETS_WEBHOOK_URL and the same secret in SHEETS_SECRET on the app side.
  *
- * Inventory sheet (one row per drawer):
+ * Inventory sheet (one row per drawer) — owned in Sheets:
  *     Drawer | Part | Quantity | Is Locked
  *
- * Session tracker sheet:
- *     Name | Time | Session ID | Action | Part | Shelf | Quantity | Locked?
+ * The app reads inventory; take/return only patch Quantity (set_quantity).
+ * Full snapshot overwrites are disabled.
  *
- * Action values written by the app:
- *     Lock | Unlock | Take | Return
- *     Take + Lock | Return + Lock | Unlock + Take | Unlock + Return
+ * Session tracker sheet (append-only from the app):
+ *     Name | Time | Session ID | Action | Part | Shelf | Quantity | Locked?
  */
 
 function doPost(e) {
@@ -25,11 +24,18 @@ function doPost(e) {
       return json_({ error: 'forbidden' });
     }
     if (body.type === 'snapshot') {
-      var n = syncSnapshot_(body.drawers || []);
-      return json_({ ok: true, updated: n });
+      // Disabled — inventory Part / Quantity / Locked are owned by the sheet.
+      // Use set_quantity for take/return stock updates only.
+      return json_({ ok: false, error: 'snapshot_disabled' });
     }
     if (body.type === 'inventory') {
       return json_({ ok: true, drawers: readInventory_() });
+    }
+    if (body.type === 'set_quantity') {
+      return json_({
+        ok: true,
+        updated: setQuantity_(body.number, body.quantity),
+      });
     }
     if (body.type === 'session_row') {
       var row = body.row || {};
@@ -83,6 +89,22 @@ function readInventory_() {
     });
   }
   return drawers;
+}
+
+/** Write only Quantity for one drawer. Never touches Part or Is Locked. */
+function setQuantity_(number, quantity) {
+  var t = locateTable_();
+  if (!t) throw new Error('No sheet with a "Part" and "Quantity" header row found.');
+  if (!t.col.quantity) throw new Error('No Quantity column found.');
+
+  var rowIdx = findRowByNumber_(t, number);
+  if (rowIdx === -1) return 0;
+
+  var sheetRow = t.headerRow + 1 + rowIdx;
+  var qty = Number(quantity);
+  if (isNaN(qty) || qty < 0) qty = 0;
+  t.sheet.getRange(sheetRow, t.col.quantity).setValue(qty);
+  return 1;
 }
 
 function syncSnapshot_(drawers) {
@@ -332,7 +354,7 @@ function colorLockedCell_(sheet, row, col, locked) {
   cell.setFontWeight('bold');
 }
 
-function json_(obj) {
+function json_(obj) {a
   return ContentService.createTextOutput(JSON.stringify(obj)).setMimeType(
     ContentService.MimeType.JSON
   );

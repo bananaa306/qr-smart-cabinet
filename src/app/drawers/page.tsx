@@ -183,7 +183,11 @@ export default function DrawersPage() {
             )}
           </header>
 
-          <SyncBar connected={sheets} accent={accent} />
+          <SyncBar
+            connected={sheets}
+            accent={accent}
+            onRefreshed={(next) => setDrawers(next)}
+          />
 
           {drawers === null ? (
             <div className="relative z-[1] px-5 pt-24">
@@ -223,13 +227,28 @@ export default function DrawersPage() {
   );
 }
 
-function SyncBar({ connected, accent }: { connected: boolean; accent: string }) {
+function SyncBar({
+  connected,
+  accent,
+  onRefreshed,
+}: {
+  connected: boolean;
+  accent: string;
+  onRefreshed: (drawers: DrawerView[]) => void;
+}) {
   const [state, setState] = useState<"idle" | "syncing" | "ok" | "err">("idle");
 
   async function syncNow() {
     setState("syncing");
-    const { ok } = await api("/api/sheets/sync", { method: "POST" });
-    setState(ok ? "ok" : "err");
+    const sync = await api("/api/sheets/sync", { method: "POST" });
+    if (!sync.ok) {
+      setState("err");
+      setTimeout(() => setState("idle"), 2200);
+      return;
+    }
+    const list = await api<{ drawers: DrawerView[] }>("/api/drawers");
+    if (list.ok) onRefreshed(list.data.drawers);
+    setState("ok");
     setTimeout(() => setState("idle"), 2200);
   }
 
@@ -240,16 +259,16 @@ function SyncBar({ connected, accent }: { connected: boolean; accent: string }) 
         style={{ background: connected ? "#3E8E5A" : "var(--smart-sub)" }}
       />
       <div className="min-w-0 flex-1 truncate">
-        {connected ? "Synced to Google Sheets" : "Local inventory"}
+        {connected ? "Following Google Sheet" : "Local inventory"}
       </div>
       <button onClick={syncNow} disabled={state === "syncing"} style={{ background: accent }}>
         {state === "syncing"
-          ? "Syncing"
+          ? "Loading"
           : state === "ok"
-            ? "Synced"
+            ? "Updated"
             : state === "err"
               ? "Failed"
-              : "Sync now"}
+              : "Refresh"}
       </button>
     </div>
   );

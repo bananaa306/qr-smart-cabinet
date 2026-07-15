@@ -1,14 +1,13 @@
 import { audit, db, seed } from "./store";
-import type { Drawer, StockLevel, Transaction, User } from "./types";
+import type { Drawer } from "./types";
 
 // ---------------------------------------------------------------------------
 // Google Sheets inventory + session tracker.
 //
-// When SHEETS_WEBHOOK_URL + SHEETS_SECRET are set, drawer quantities (and lock
-// state / part names) are pulled from the inventory sheet before list/detail
-// and before take/return. Mutations push a snapshot back. Session rows are
-// still append-only. Sheets is used as the shared inventory for multi-instance
-// hosts (e.g. Vercel); the in-memory store is a per-request working cache.
+// Inventory sheet is authoritative for Part / Quantity / Is Locked. The app
+// pulls those values before list/detail and before take/return. Take/return
+// patches Quantity only (never Part or Locked). Session tracker rows are
+// append-only. Full inventory snapshots are disabled.
 //
 // Configured entirely by env — if either var is missing sheets are a no-op:
 //   SHEETS_WEBHOOK_URL   the deployed Apps Script Web App /exec URL
@@ -74,6 +73,15 @@ async function postToSheets(payload: Record<string, unknown>): Promise<Response 
 async function postOk(payload: Record<string, unknown>): Promise<boolean> {
   const res = await postToSheets(payload);
   return Boolean(res?.ok);
+}
+
+function invalidatePullCache() {
+  lastPullAt = 0;
+  lastPullOk = false;
+}
+
+function drawerNumber(drawer: Drawer): number {
+  return parseInt(drawer.label.replace(/[^0-9]/g, ""), 10) || 0;
 }
 
 // ---------------------------------------------------------------------------
@@ -184,6 +192,7 @@ function applySheetRowsToStore(rows: SheetDrawerRow[]) {
       }
     }
 
+    // Locked column is owned by the sheet — mirror it into the open-map.
     if (row.locked) {
       db.openDrawer.delete(drawer.id);
     } else if (!db.openDrawer.has(drawer.id)) {
@@ -192,97 +201,37 @@ function applySheetRowsToStore(rows: SheetDrawerRow[]) {
   }
 }
 
-// ---------------------------------------------------------------------------
-// Live snapshot sync. Pushes the CURRENT state of every drawer (part, quantity,
-// locked) so a "one row per drawer" sheet stays up to date. Rows are matched on
-// the drawer number by the Apps Script. Best-effort: never throws.
-// ---------------------------------------------------------------------------
+/** Patch Quantity for one drawer only — does not rewrite Part or Is Locked. */
+export async function setSheetQuantity(
+  drawer: Drawer,
+  quantity: number,
+): Promise<boolean> {
+  if (!sheetsEnabled()) return false;
+  const number = drawerNumber(drawer);
+  if (!number) return false;
+
+  const ok = await postOk({
+    secret: SECRET,
+    type: "set_quantity",
+    number,
+    quantity: Math.max(0, Math.floor(quantity)),
+  });
+  if (!ok) {
+    audit({ type: "sheets.qty_error", drawerId: drawer.id, detail: String(quantity) });
+    return false;
+  }
+  invalidatePullCache();
+  audit({ type: "sheets.qty_ok", drawerId: drawer.id, detail: String(quantity) });
+  return true;
+}
+
+/** Refresh from sheet (UI Sync button). Never pushes inventory rows. */
 export async function syncSheet(): Promise<{ ok: boolean; error?: string }> {
   if (!sheetsEnabled()) return { ok: false, error: "not_configured" };
-
-  const drawers = [...db.drawers.values()]
-    .map((d) => {
-      const stock = db.stock.get(d.id);
-      const item = db.items.get(d.itemId);
-      // "Drawer 7" -> 7 (the row key in the sheet)
-      const number = parseInt(d.label.replace(/[^0-9]/g, ""), 10) || 0;
-      return {
-        number,
-        drawer: d.label,
-        part: item?.name ?? d.itemId,
-        quantity: stock?.quantity ?? 0,
-        locked: !db.openDrawer.has(d.id),
-        status: d.status,
-      };
-    })
-    .sort((a, b) => a.number - b.number);
-
-  const payload = { secret: SECRET, type: "snapshot", drawers };
-
-  const res = await postToSheets(payload);
-  if (!res) {
-    audit({ type: "sheets.sync_error", detail: "fetch_failed" });
-    return { ok: false, error: "fetch_failed" };
-  }
-  if (!res.ok) {
-    audit({ type: "sheets.sync_error", detail: `http ${res.status}` });
-    return { ok: false, error: `http_${res.status}` };
-  }
-  // Invalidate pull cache so the next read sees our write.
-  lastPullAt = 0;
-  lastPullOk = false;
-  audit({ type: "sheets.sync_ok", detail: `${drawers.length} drawers` });
-  return { ok: true };
+  const ok = await pullStockFromSheets({ force: true });
+  return ok ? { ok: true } : { ok: false, error: "pull_failed" };
 }
 
 export function sheetsEnabled(): boolean {
   return Boolean(WEBHOOK_URL && SECRET);
-}
-
-export async function mirrorTransaction(
-  tx: Transaction,
-  drawer: Drawer,
-  stock: StockLevel,
-  user: User,
-): Promise<void> {
-  if (!sheetsEnabled()) return;
-
-  const item = db.items.get(drawer.itemId);
-  const payload = {
-    secret: SECRET,
-    type: "transaction",
-    transaction: {
-      id: tx.id,
-      timestamp: new Date(tx.createdAt).toISOString(),
-      user: user.name,
-      email: user.email,
-      cabinet: drawer.cabinet,
-      drawer: drawer.label,
-      drawerId: drawer.id,
-      item: item?.name ?? drawer.itemId,
-      unit: item?.unit ?? "",
-      intent: tx.intent,
-      delta: tx.delta,
-      balanceAfter: tx.balanceAfter,
-    },
-    stock: {
-      drawerId: drawer.id,
-      cabinet: drawer.cabinet,
-      drawer: drawer.label,
-      item: item?.name ?? drawer.itemId,
-      quantity: stock.quantity,
-      updatedAt: new Date(tx.createdAt).toISOString(),
-    },
-  };
-
-  const res = await postToSheets(payload);
-  if (!res?.ok) {
-    audit({
-      type: "sheets.mirror_error",
-      drawerId: drawer.id,
-      detail: res ? `http ${res.status}` : "fetch_failed",
-    });
-  } else {
-    audit({ type: "sheets.mirror_ok", drawerId: drawer.id, detail: tx.id });
-  }
 }

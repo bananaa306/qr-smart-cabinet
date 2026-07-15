@@ -11,7 +11,7 @@ import {
 import { currentSession } from "@/lib/session";
 import { drawerView } from "@/lib/dto";
 import { deviceOpen, issueUnlockCommand } from "@/lib/lock";
-import { logSessionRow, pullStockFromSheets, syncSheet } from "@/lib/sheets";
+import { logSessionRow, pullStockFromSheets } from "@/lib/sheets";
 
 interface Body {
   idempotencyKey?: unknown;
@@ -116,18 +116,15 @@ export async function POST(
   const item = db.items.get(drawer.itemId);
   const partName = item?.name ?? drawer.itemId;
 
-  await Promise.all([
-    syncSheet(),
-    logSessionRow({
-      name: session.displayName,
-      sessionId: session.trackerSessionId,
-      action: "Unlock",
-      part: partName,
-      shelf: drawer.label,
-      quantity: 0,
-      locked: false,
-    }),
-  ]);
+  await logSessionRow({
+    name: session.displayName,
+    sessionId: session.trackerSessionId,
+    action: "Unlock",
+    part: partName,
+    shelf: drawer.label,
+    quantity: 0,
+    locked: false,
+  });
 
   audit({ type: "unlock.granted", userId: user.id, drawerId: drawer.id, detail: "physical" });
 

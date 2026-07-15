@@ -10,7 +10,7 @@ import {
 } from "@/lib/security";
 import { currentSession } from "@/lib/session";
 import { drawerView } from "@/lib/dto";
-import { logSessionRow, pullStockFromSheets, syncSheet } from "@/lib/sheets";
+import { logSessionRow, pullStockFromSheets, setSheetQuantity } from "@/lib/sheets";
 import type { Intent, Transaction } from "@/lib/types";
 
 interface Body {
@@ -157,7 +157,7 @@ export async function POST(
         : "Return";
 
   await Promise.all([
-    syncSheet(),
+    setSheetQuantity(drawer, stock.quantity),
     logSessionRow({
       name: trackerName,
       sessionId: trackerSessionId,
