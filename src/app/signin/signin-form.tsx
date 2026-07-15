@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import {
   buildSmartScreenStyle,
   RooseveltIslandScene,
@@ -10,8 +10,14 @@ import {
 } from "@/components/smart-shell";
 import { api } from "@/lib/client";
 
+function safeNextPath(raw: string | null): string {
+  if (!raw || !raw.startsWith("/") || raw.startsWith("//")) return "/drawers";
+  return raw;
+}
+
 export function SignInForm() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const [name, setName] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [working, setWorking] = useState(false);
@@ -36,7 +42,7 @@ export function SignInForm() {
     setWorking(false);
 
     if (ok) {
-      router.replace("/drawers");
+      router.replace(safeNextPath(searchParams.get("next")));
       return;
     }
     if (status === 429) {

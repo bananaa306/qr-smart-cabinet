@@ -76,6 +76,12 @@ body {
   text-rendering: optimizeLegibility;
 }
 
+/* Espresso shell shell — kill the old teal flash on first paint / QR scan-in. */
+body.smart-root {
+  background: #1d1a16;
+  color: #f2ecdd;
+}
+
 /* Focus ring for a11y (WCAG 2.2 AA, PRD §A.3) */
 :where(button, a, input, [tabindex]):focus-visible {
   outline: 2px solid var(--brand);

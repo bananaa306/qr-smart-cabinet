@@ -1,8 +1,7 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
-import { useRouter } from "next/navigation";
-import { Spinner } from "@/components/ui";
+import { Suspense, useEffect, useRef, useState } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import {
   BottomTabs,
   buildSmartScreenStyle,
@@ -94,7 +93,35 @@ const fronts = ["#FFFDF8", "#F7F0DF", "#FBF6EC"];
 const borders = ["#E6DCC4", "#DFD3B6", "#E4DAC1"];
 
 export default function DrawersPage() {
+  return (
+    <Suspense fallback={<DrawersBoot />}>
+      <DrawersPageInner />
+    </Suspense>
+  );
+}
+
+function DrawersBoot() {
+  const t = smartEspressoTheme;
+  const accent = SMART_ACCENT;
+  return (
+    <div className="h-dvh overflow-hidden" style={{ background: t.bg }}>
+      <main className="smart-screen" style={buildSmartScreenStyle(t, accent)}>
+        <RooseveltIslandScene />
+        <div className="smart-screen-body">
+          <div className="smart-loading" role="status">
+            <span className="spin h-7 w-7 rounded-full border-2" />
+            <span>Loading cabinet…</span>
+          </div>
+        </div>
+      </main>
+    </div>
+  );
+}
+
+function DrawersPageInner() {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const openParam = searchParams.get("open");
   const [drawers, setDrawers] = useState<DrawerView[] | null>(null);
   const [sheets, setSheets] = useState(false);
   const [sessionName, setSessionName] = useState<string | null>(null);
@@ -103,6 +130,7 @@ export default function DrawersPage() {
   const [detailPhase, setDetailPhase] = useState<DetailPhase>("idle");
   const closeTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const openTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const openedFromScan = useRef(false);
 
   const DETAIL_REVEAL_DELAY_MS = 320;
 
@@ -130,6 +158,18 @@ export default function DrawersPage() {
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps -- mount load
   }, [router]);
+
+  // QR / deep-link: /drawers?open=<id> opens that drawer in the espresso UI.
+  useEffect(() => {
+    if (!drawers || !openParam || openedFromScan.current) return;
+    const key = openParam.trim();
+    const idx = drawers.findIndex((d) => d.id === key);
+    if (idx < 0) return;
+    openedFromScan.current = true;
+    openDrawer(idx);
+    router.replace("/drawers", { scroll: false });
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- open once from scan
+  }, [drawers, openParam]);
 
   const t = smartEspressoTheme;
   const accent = SMART_ACCENT;
@@ -219,8 +259,9 @@ export default function DrawersPage() {
           />
 
           {drawers === null ? (
-            <div className="relative z-[1] px-5 pt-24">
-              <Spinner label="Loading cabinet..." />
+            <div className="smart-loading" role="status">
+              <span className="spin h-7 w-7 rounded-full border-2" />
+              <span>Loading cabinet…</span>
             </div>
           ) : drawers.length === 0 ? (
             <p className="relative z-[1] mx-5 mt-24 rounded-2xl border border-[var(--smart-panel-border)] bg-[var(--smart-panel-bg)] p-5 text-center text-sm text-[var(--smart-sub)]">

@@ -18,6 +18,9 @@
 
 function doPost(e) {
   try {
+    if (!e || !e.postData || !e.postData.contents) {
+      return json_({ error: 'no_body' });
+    }
     var body = JSON.parse(e.postData.contents);
     var secret = PropertiesService.getScriptProperties().getProperty('SECRET');
     if (!secret || body.secret !== secret) {
@@ -390,8 +393,9 @@ function colorLockedCell_(sheet, row, col, locked) {
   cell.setFontWeight('bold');
 }
 
-function json_(obj) {a
+function json_(obj) {
+  // TEXT is more reliable than JSON mime for Apps Script /exec redirects.
   return ContentService.createTextOutput(JSON.stringify(obj)).setMimeType(
-    ContentService.MimeType.JSON
+    ContentService.MimeType.TEXT
   );
 }

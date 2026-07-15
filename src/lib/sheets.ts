@@ -57,13 +57,39 @@ async function postToSheets(payload: Record<string, unknown>): Promise<Response 
     const ctrl = new AbortController();
     // Apps Script cold starts are often 5–15s from serverless hosts.
     const timer = setTimeout(() => ctrl.abort(), 25000);
-    const res = await fetch(WEBHOOK_URL!, {
+    const body = JSON.stringify(payload);
+    const headers = { "Content-Type": "text/plain;charset=utf-8" };
+
+    // Apps Script /exec returns 302 → googleusercontent. Prefer manual follow so
+    // we don't lose the ContentService body (common with auto-follow + JSON mime).
+    let res = await fetch(WEBHOOK_URL!, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(payload),
+      headers,
+      body,
       signal: ctrl.signal,
-      redirect: "follow",
+      redirect: "manual",
     });
+
+    if (res.status >= 300 && res.status < 400) {
+      const loc = res.headers.get("location");
+      if (loc) {
+        res = await fetch(loc, {
+          method: "GET",
+          signal: ctrl.signal,
+          redirect: "follow",
+        });
+      } else {
+        // Location stripped — fall back to automatic redirect follow.
+        res = await fetch(WEBHOOK_URL!, {
+          method: "POST",
+          headers,
+          body,
+          signal: ctrl.signal,
+          redirect: "follow",
+        });
+      }
+    }
+
     clearTimeout(timer);
     return res;
   } catch {
@@ -71,9 +97,34 @@ async function postToSheets(payload: Record<string, unknown>): Promise<Response 
   }
 }
 
+/** Parse Apps Script body — they sometimes wrap or return empty on bad redirects. */
+function parseSheetsJson(text: string): unknown {
+  const trimmed = text.trim();
+  if (!trimmed) throw new Error("empty_body");
+  try {
+    return JSON.parse(trimmed);
+  } catch {
+    // Recover if Google wraps JSON in HTML or junk.
+    const start = trimmed.indexOf("{");
+    const end = trimmed.lastIndexOf("}");
+    if (start >= 0 && end > start) {
+      return JSON.parse(trimmed.slice(start, end + 1));
+    }
+    throw new Error("invalid_json");
+  }
+}
+
 async function postOk(payload: Record<string, unknown>): Promise<boolean> {
   const res = await postToSheets(payload);
-  return Boolean(res?.ok);
+  if (!res) return false;
+  try {
+    const text = await res.text();
+    const body = parseSheetsJson(text) as { error?: string; ok?: boolean };
+    if (body?.error && body.error !== "snapshot_disabled") return false;
+    return res.ok || res.status === 200;
+  } catch {
+    return false;
+  }
 }
 
 function invalidatePullCache() {
@@ -157,14 +208,18 @@ export async function pullStockFromSheets(opts?: {
 
   let body: { drawers?: SheetDrawerRow[]; error?: string; ok?: boolean };
   try {
-    body = JSON.parse(text) as { drawers?: SheetDrawerRow[]; error?: string; ok?: boolean };
+    body = parseSheetsJson(text) as {
+      drawers?: SheetDrawerRow[];
+      error?: string;
+      ok?: boolean;
+    };
   } catch {
     audit({
       type: "sheets.pull_error",
       detail: `invalid_json http_${res.status} ${text.slice(0, 120)}`,
     });
     lastPullOk = false;
-    return { ok: false, error: `invalid_json` };
+    return { ok: false, error: "invalid_json" };
   }
 
   if (body.error) {

@@ -7,10 +7,11 @@ export const metadata: Metadata = {
 };
 
 export const viewport: Viewport = {
-  themeColor: "#0f9488",
+  themeColor: "#1D1A16",
   width: "device-width",
   initialScale: 1,
   maximumScale: 1,
+  colorScheme: "dark",
 };
 
 export default function RootLayout({
@@ -20,7 +21,7 @@ export default function RootLayout({
 }) {
   return (
     <html lang="en">
-      <body>
+      <body className="smart-root">
         <div className="mx-auto flex min-h-dvh w-full max-w-md flex-col">
           {children}
         </div>
