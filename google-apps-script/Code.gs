@@ -154,30 +154,47 @@ function syncSnapshot_(drawers) {
 }
 
 function locateTable_() {
-  var sheets = SpreadsheetApp.getActiveSpreadsheet().getSheets();
+  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  var sheets = ss.getSheets();
+  // Prefer an inventory-looking tab when multiple Part/Quantity tables exist.
+  sheets.sort(function (a, b) {
+    return inventorySheetScore_(b.getName()) - inventorySheetScore_(a.getName());
+  });
+
   for (var s = 0; s < sheets.length; s++) {
     var sheet = sheets[s];
     if (sheet.getLastRow() < 1 || sheet.getLastColumn() < 1) continue;
-    var headers = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0];
+    var width = sheet.getLastColumn();
+    var headers = sheet.getRange(1, 1, 1, width).getValues()[0];
     var col = {};
     for (var c = 0; c < headers.length; c++) {
-      var h = String(headers[c]).trim().toLowerCase();
-      if (h === 'drawer') col.drawer = c + 1;
-      else if (h === '#' && !col.drawer) col.drawer = c + 1;
-      else if (h === 'part' || h === 'item') col.part = c + 1;
-      else if (h === 'quantity' || h === 'qty') col.quantity = c + 1;
-      else if (h === 'is locked' || h === 'locked') col.locked = c + 1;
+      var h = String(headers[c] == null ? '' : headers[c]).trim().toLowerCase();
+      if (h === 'drawer' || h === 'drawer #' || h === 'drawer number') col.drawer = c + 1;
+      else if ((h === '#' || h === 'no' || h === 'no.') && !col.drawer) col.drawer = c + 1;
+      else if (h === 'part' || h === 'item' || h === 'parts' || h === 'item name') col.part = c + 1;
+      else if (h === 'quantity' || h === 'qty' || h === 'stock' || h === 'count') col.quantity = c + 1;
+      else if (h === 'is locked' || h === 'locked' || h === 'locked?') col.locked = c + 1;
+      else if (h === 'session id' || h === 'sessionid') col.sessionId = c + 1;
     }
+    // Must be inventory (Part + Quantity), not the session tracker tab.
     if (col.part && col.quantity && !col.sessionId) {
       var lastRow = sheet.getLastRow();
-      var width = sheet.getLastColumn();
-      var rows = lastRow > 1
-        ? sheet.getRange(2, 1, lastRow - 1, width).getValues()
+      var numDataRows = Math.max(0, lastRow - 1);
+      // Sheet.getRange(row, column, numRows, numColumns) — 3rd/4th are COUNTS.
+      var rows = numDataRows > 0
+        ? sheet.getRange(2, 1, numDataRows, width).getValues()
         : [];
       return { sheet: sheet, headerRow: 1, col: col, rows: rows, width: width };
     }
   }
   return null;
+}
+
+function inventorySheetScore_(name) {
+  var n = String(name || '').toLowerCase();
+  if (/inventory|stock|cabinet|drawer/.test(n)) return 10;
+  if (/session|ledger|log|tracker|activity/.test(n)) return -10;
+  return 0;
 }
 
 function findRowByNumber_(t, number) {

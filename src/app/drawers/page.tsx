@@ -268,24 +268,54 @@ function SyncBar({
   reload: () => Promise<DrawerView[] | null>;
 }) {
   const [state, setState] = useState<"idle" | "syncing" | "ok" | "err">("idle");
+  const [hint, setHint] = useState<string | null>(null);
 
   async function syncNow() {
     setState("syncing");
+    setHint(null);
     try {
-      // Best-effort sheet pull; cabinet reload is what the UI needs.
-      await api("/api/sheets/sync", { method: "POST" });
+      const sync = await api<{
+        ok?: boolean;
+        error?: string;
+        count?: number;
+        parts?: string[];
+      }>("/api/sheets/sync", { method: "POST" });
+
       const next = await reload();
       if (!next) {
         setState("err");
-        setTimeout(() => setState("idle"), 2200);
+        setHint("Couldn’t reload drawers");
+        setTimeout(() => setState("idle"), 2800);
         return;
       }
       onRefreshed(next);
-      setState("ok");
+
+      if (!sync.data?.ok) {
+        setState("err");
+        setHint(
+          sync.data?.error === "pull_failed"
+            ? "Sheet pull failed — redeploy Apps Script"
+            : sync.data?.error === "not_configured"
+              ? "Sheets env vars missing on host"
+              : "Sheet pull failed",
+        );
+      } else {
+        setState("ok");
+        const sample = sync.data.parts?.find((p) => /wasd|3dwada/i.test(p));
+        setHint(
+          sample
+            ? `Sheet OK · ${sample}`
+            : `Sheet OK · ${sync.data.count ?? next.length} drawers`,
+        );
+      }
     } catch {
       setState("err");
+      setHint("Network error");
     }
-    setTimeout(() => setState("idle"), 2200);
+    setTimeout(() => {
+      setState("idle");
+      setHint(null);
+    }, 3200);
   }
 
   return (
@@ -295,7 +325,11 @@ function SyncBar({
         style={{ background: connected ? "#3E8E5A" : "var(--smart-sub)" }}
       />
       <div className="min-w-0 flex-1 truncate">
-        {connected ? "Following Google Sheet" : "Local inventory"}
+        {hint
+          ? hint
+          : connected
+            ? "Following Google Sheet"
+            : "Local inventory"}
       </div>
       <button onClick={syncNow} disabled={state === "syncing"} style={{ background: accent }}>
         {state === "syncing"

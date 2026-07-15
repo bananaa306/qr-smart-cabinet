@@ -14,7 +14,7 @@ export async function GET() {
   const user = await currentUser();
   if (!user) return NextResponse.json({ error: "unauthenticated" }, { status: 401 });
 
-  await pullStockFromSheets();
+  await pullStockFromSheets({ force: true });
 
   const drawers = [...db.drawers.values()]
     .filter((d) => canAccessDrawer(user.id, d.id))

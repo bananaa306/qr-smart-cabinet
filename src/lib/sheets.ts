@@ -17,7 +17,7 @@ import type { Drawer } from "./types";
 const WEBHOOK_URL = process.env.SHEETS_WEBHOOK_URL;
 const SECRET = process.env.SHEETS_SECRET;
 
-const PULL_CACHE_MS = 1500;
+const PULL_CACHE_MS = 0; // no in-process cache — Vercel isolates don't share memory
 let lastPullAt = 0;
 let lastPullOk = false;
 
@@ -196,8 +196,8 @@ function applySheetRowsToStore(rows: SheetDrawerRow[]) {
 
   for (const row of rows) {
     const number = Number(row.number);
-    if (!number) continue;
-    const drawer = byNumber.get(number);
+    if (!Number.isFinite(number) || number < 1) continue;
+    const drawer = byNumber.get(Math.floor(number));
     if (!drawer) continue;
 
     const stock = db.stock.get(drawer.id);
@@ -209,10 +209,11 @@ function applySheetRowsToStore(rows: SheetDrawerRow[]) {
       stock.version += 1;
     }
 
-    const part = typeof row.part === "string" ? row.part.trim() : "";
+    // Part names can arrive as non-strings from Sheets JSON — coerce always.
+    const part = String(row.part ?? "").trim();
     if (part) {
       const item = db.items.get(drawer.itemId);
-      if (item && item.name !== part) {
+      if (item) {
         db.items.set(drawer.itemId, { ...item, name: part });
       }
     }
@@ -251,10 +252,24 @@ export async function setSheetQuantity(
 }
 
 /** Refresh from sheet (UI Sync button). Never pushes inventory rows. */
-export async function syncSheet(): Promise<{ ok: boolean; error?: string }> {
+export async function syncSheet(): Promise<{
+  ok: boolean;
+  error?: string;
+  count?: number;
+  parts?: string[];
+}> {
   if (!sheetsEnabled()) return { ok: false, error: "not_configured" };
   const ok = await pullStockFromSheets({ force: true });
-  return ok ? { ok: true } : { ok: false, error: "pull_failed" };
+  if (!ok) return { ok: false, error: "pull_failed" };
+
+  const parts = [...db.drawers.values()]
+    .sort((a, b) => a.label.localeCompare(b.label, undefined, { numeric: true }))
+    .map((d) => {
+      const item = db.items.get(d.itemId);
+      return `${d.label}: ${item?.name ?? "?"}`;
+    });
+
+  return { ok: true, count: parts.length, parts };
 }
 
 export function sheetsEnabled(): boolean {
