@@ -3,7 +3,7 @@ import { audit, db, seed } from "@/lib/store";
 import { LIMITS, canAccessDrawer } from "@/lib/security";
 import { currentSession } from "@/lib/session";
 import { drawerView } from "@/lib/dto";
-import { logSessionRow, pullStockFromSheets } from "@/lib/sheets";
+import { logSessionRow, pullStockFromSheets, setSheetLocked } from "@/lib/sheets";
 
 // POST /api/drawers/{id}/lock — physical lock (no stock mutation).
 export async function POST(
@@ -34,6 +34,8 @@ export async function POST(
   const partName = item?.name ?? drawer.itemId;
   const openSessionId = db.openDrawer.get(drawer.id);
   if (!openSessionId) {
+    // Already locked in-app — still mirror Is Locked onto the inventory sheet.
+    void setSheetLocked(drawer, true);
     return NextResponse.json({ ok: true, locked: true, drawer: drawerView(drawer, stock) });
   }
 
@@ -50,7 +52,9 @@ export async function POST(
   }
   audit({ type: "lock.relocked_by_user", userId: user.id, drawerId: drawer.id });
 
-  // Session tracker only — inventory Locked column stays sheet-owned.
+  await setSheetLocked(drawer, true);
+
+  // Session tracker row + inventory Is Locked column.
   await logSessionRow(
     {
       name: visit.displayName,

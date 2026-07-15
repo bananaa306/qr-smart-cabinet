@@ -336,6 +336,38 @@ export async function setSheetQuantity(
   return true;
 }
 
+/** Patch Is Locked for one drawer only — does not rewrite Part or Quantity. */
+export async function setSheetLocked(
+  drawer: Drawer,
+  locked: boolean,
+): Promise<boolean> {
+  if (!sheetsEnabled()) return false;
+  const number = drawerNumber(drawer);
+  if (!number) return false;
+
+  const ok = await postOk({
+    secret: SECRET,
+    type: "set_locked",
+    number,
+    locked: Boolean(locked),
+  });
+  if (!ok) {
+    audit({
+      type: "sheets.lock_error",
+      drawerId: drawer.id,
+      detail: locked ? "locked" : "unlocked",
+    });
+    return false;
+  }
+  invalidatePullCache();
+  audit({
+    type: "sheets.lock_ok",
+    drawerId: drawer.id,
+    detail: locked ? "locked" : "unlocked",
+  });
+  return true;
+}
+
 /** Refresh from sheet (UI Sync button). Never pushes inventory rows. */
 export async function syncSheet(): Promise<{
   ok: boolean;

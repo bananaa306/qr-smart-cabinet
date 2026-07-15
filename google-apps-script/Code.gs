@@ -40,6 +40,12 @@ function doPost(e) {
         updated: setQuantity_(body.number, body.quantity),
       });
     }
+    if (body.type === 'set_locked') {
+      return json_({
+        ok: true,
+        updated: setLocked_(body.number, body.locked),
+      });
+    }
     if (body.type === 'session_row') {
       var row = body.row || {};
       if (body.action === 'update') {
@@ -125,6 +131,22 @@ function setQuantity_(number, quantity) {
   var qty = Number(quantity);
   if (isNaN(qty) || qty < 0) qty = 0;
   t.sheet.getRange(sheetRow, t.col.quantity).setValue(qty);
+  return 1;
+}
+
+/** Write only Is Locked for one drawer. Never touches Part or Quantity. */
+function setLocked_(number, locked) {
+  var t = locateTable_();
+  if (!t) throw new Error('No sheet with a "Part" and "Quantity" header row found.');
+  if (!t.col.locked) throw new Error('No Is Locked column found.');
+
+  var rowIdx = findRowByNumber_(t, number);
+  if (rowIdx === -1) return 0;
+
+  var sheetRow = t.headerRow + 1 + rowIdx;
+  var value = !!locked;
+  t.sheet.getRange(sheetRow, t.col.locked).setValue(value);
+  colorLockedCell_(t.sheet, sheetRow, t.col.locked, value);
   return 1;
 }
 

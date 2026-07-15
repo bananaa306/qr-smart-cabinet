@@ -474,6 +474,20 @@ body.smart-root {
   opacity: 0.9;
 }
 
+.smart-front-lock {
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  display: grid;
+  place-items: center;
+  pointer-events: none;
+  color: rgba(46, 39, 24, 0.55);
+}
+
+.smart-front-lock svg {
+  filter: drop-shadow(0 1px 0 rgba(255, 253, 248, 0.55));
+}
+
 .smart-front-top,
 .smart-front-bottom {
   display: flex;

@@ -45,7 +45,8 @@ Drawer numbers must match app labels (`Drawer 1` → `1`).
 - **Read:** `inventory` → fills the UI from the sheet.
 - **Take/return:** `set_quantity` → updates that row’s Quantity only.
 - **Refresh button:** pulls from the sheet again (does not push inventory).
-- **Lock/unlock:** session log only; Is Locked stays sheet-owned until you change it in Sheets.
+- **Lock/unlock:** patches inventory **Is Locked** and appends/updates the session
+  tracker. Redeploy Apps Script with **New version** after `Code.gs` changes.
 - Full `snapshot` overwrites are disabled.
 
 ## Architecture note

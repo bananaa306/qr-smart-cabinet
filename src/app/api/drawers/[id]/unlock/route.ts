@@ -11,7 +11,7 @@ import {
 import { currentSession } from "@/lib/session";
 import { drawerView } from "@/lib/dto";
 import { deviceOpen, issueUnlockCommand } from "@/lib/lock";
-import { logSessionRow, pullStockFromSheets } from "@/lib/sheets";
+import { logSessionRow, pullStockFromSheets, setSheetLocked } from "@/lib/sheets";
 
 interface Body {
   idempotencyKey?: unknown;
@@ -74,6 +74,7 @@ export async function POST(
 
   if (db.openDrawer.has(drawer.id)) {
     const stock = db.stock.get(drawer.id)!;
+    void setSheetLocked(drawer, false);
     const payload = { ok: true, locked: false, drawer: drawerView(drawer, stock) };
     saveIdempotent(user.id, idempotencyKey, payload);
     return NextResponse.json(payload);
@@ -115,6 +116,8 @@ export async function POST(
 
   const item = db.items.get(drawer.itemId);
   const partName = item?.name ?? drawer.itemId;
+
+  await setSheetLocked(drawer, false);
 
   await logSessionRow({
     name: session.displayName,
