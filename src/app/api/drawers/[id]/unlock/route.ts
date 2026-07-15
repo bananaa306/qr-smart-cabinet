@@ -11,7 +11,7 @@ import {
 import { currentSession } from "@/lib/session";
 import { drawerView } from "@/lib/dto";
 import { deviceOpen, issueUnlockCommand } from "@/lib/lock";
-import { logSessionRow, syncSheet } from "@/lib/sheets";
+import { logSessionRow, pullStockFromSheets, syncSheet } from "@/lib/sheets";
 
 interface Body {
   idempotencyKey?: unknown;
@@ -69,6 +69,8 @@ export async function POST(
   if (drawer.status !== "active") {
     return NextResponse.json({ error: "drawer_disabled" }, { status: 409 });
   }
+
+  await pullStockFromSheets();
 
   if (db.openDrawer.has(drawer.id)) {
     const stock = db.stock.get(drawer.id)!;

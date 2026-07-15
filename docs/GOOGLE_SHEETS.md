@@ -1,10 +1,9 @@
-# Connect to Google Sheets (append-only mirror)
+# Connect to Google Sheets (inventory + session tracker)
 
-The app stays the source of truth; every take/return is **also** pushed to your
-Google Sheet — an append-only `Ledger` tab plus a live `Stock` tab. It's
-best-effort: if the sheet is down or misconfigured, transactions still succeed.
-
-Nothing is sent to the sheet until both env vars below are set.
+When `SHEETS_WEBHOOK_URL` and `SHEETS_SECRET` are set, the **inventory sheet is
+the shared stock source** the app reads before listing drawers and before
+take/return. After each change the app writes a snapshot back. Session tracker
+rows are still append-only for ops.
 
 ## One-time setup (~5 minutes)
 
@@ -27,28 +26,41 @@ Nothing is sent to the sheet until both env vars below are set.
    ```bash
    SHEETS_WEBHOOK_URL=https://script.google.com/macros/s/AKfyc.../exec
    SHEETS_SECRET=the-same-long-random-string-from-step-3
+   SESSION_SECRET=another-long-random-string
    ```
 
-6. **Restart** the dev server (`npm run dev`). Do a take/return in the app and
-   watch the `Ledger` and `Stock` tabs populate. Tabs and headers are created
-   automatically on the first write.
+6. **Restart** the dev server (`npm run dev`). Open drawers — quantities should
+   match the inventory sheet. Do a take/return and watch Quantity + session
+   tracker update.
+
+## Sheet layout
+
+**Inventory** (headers required):
+
+| Drawer | Part | Quantity | Is Locked |
+|--------|------|----------|-----------|
+| 1 | Cat6 Patch Cable 1m | 64 | TRUE |
+
+Drawer numbers must match the app labels (`Drawer 1` → `1`, …).
+
+**Session tracker** (headers required):
+
+| Name | Time | Session ID | Action | Part | Shelf | Quantity | Locked? |
 
 ## How it behaves
 
-- `Ledger` tab: one immutable row per transaction — timestamp, user, drawer,
-  item, intent, delta, resulting balance, transaction id. Matches the PRD's
-  append-only ledger (§C.1).
-- `Stock` tab: one row per drawer, `Quantity` overwritten to the latest balance
-  on every movement.
-- The write is authenticated by the `SECRET` in the request body; a wrong or
-  missing secret is rejected by the script.
-- Failures are swallowed and recorded in the app's in-memory audit log
-  (`sheets.mirror_error`) — they never roll back a transaction.
+- **Read:** `POST { type: "inventory" }` loads Part / Quantity / Is Locked into
+  the app before list, detail, and stock mutations.
+- **Write:** `POST { type: "snapshot" }` overwrites those rows after take /
+  return / lock / unlock.
+- **Sessions:** append/update rows for workshop accountability.
+- Failures are recorded in the app audit log; a failed pull falls back to the
+  last known in-memory values for that isolate.
 
 ## Deploying on Vercel
 
-Add the same two variables as Environment Variables in the Vercel project
-(`vercel env add SHEETS_WEBHOOK_URL` / `SHEETS_SECRET`), then redeploy.
+Add the same variables as Environment Variables in the Vercel project
+(`SHEETS_WEBHOOK_URL`, `SHEETS_SECRET`, `SESSION_SECRET`), then redeploy.
 
 ## Updating the script later
 
@@ -56,9 +68,8 @@ After editing `Code.gs`, in Apps Script use **Deploy → Manage deployments →
 edit (pencil) → Version: New version → Deploy** so the `/exec` URL keeps working
 without changing.
 
-## A note on architecture
+## Architecture note
 
-Sheets is a great **mirror / ops surface**, but it isn't a transactional
-database — it has no row locking or atomic multi-write. That's why the app keeps
-its own authoritative ledger and only mirrors to the sheet. For a production
-source of truth, use PostgreSQL (PRD §7) and keep the sheet as a report/export.
+Sheets works as a shared ops inventory for workshop hosting. It is not a true
+transactional database (no row locking). For production-grade concurrency, use
+PostgreSQL (PRD §7) and keep the sheet as a report/export.

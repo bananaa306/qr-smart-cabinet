@@ -3,6 +3,7 @@ import { audit, db, seed } from "@/lib/store";
 import { LIMITS, canAccessDrawer, clientIp, rateLimit } from "@/lib/security";
 import { currentUser } from "@/lib/session";
 import { drawerView } from "@/lib/dto";
+import { pullStockFromSheets } from "@/lib/sheets";
 
 // GET /api/drawers/{id} — resolve drawer metadata + live stock (PRD §B.2 step 3).
 // Accepts an opaque id or the printed short code (manual fallback, §B.2 step 4).
@@ -18,6 +19,8 @@ export async function GET(
 
   const user = await currentUser();
   if (!user) return NextResponse.json({ error: "unauthenticated" }, { status: 401 });
+
+  await pullStockFromSheets();
 
   // Throttle lookups to make enumeration impractical (§5.1).
   const gate = rateLimit(`lookup:${user.id}`, LIMITS.lookup.limit, LIMITS.lookup.windowMs);

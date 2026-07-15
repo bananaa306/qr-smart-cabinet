@@ -3,7 +3,7 @@ import { db, seed } from "@/lib/store";
 import { canAccessDrawer } from "@/lib/security";
 import { currentUser } from "@/lib/session";
 import { drawerView } from "@/lib/dto";
-import { sheetsEnabled } from "@/lib/sheets";
+import { pullStockFromSheets, sheetsEnabled } from "@/lib/sheets";
 
 // GET /api/drawers — the main menu. Lists only the drawers this user is
 // permitted to open (deny-by-default, §5.2) with their live stock. No other
@@ -13,6 +13,8 @@ export async function GET() {
 
   const user = await currentUser();
   if (!user) return NextResponse.json({ error: "unauthenticated" }, { status: 401 });
+
+  await pullStockFromSheets();
 
   const drawers = [...db.drawers.values()]
     .filter((d) => canAccessDrawer(user.id, d.id))

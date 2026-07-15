@@ -10,7 +10,7 @@ import {
 } from "@/lib/security";
 import { currentSession } from "@/lib/session";
 import { drawerView } from "@/lib/dto";
-import { logSessionRow, syncSheet } from "@/lib/sheets";
+import { logSessionRow, pullStockFromSheets, syncSheet } from "@/lib/sheets";
 import type { Intent, Transaction } from "@/lib/types";
 
 interface Body {
@@ -88,6 +88,9 @@ export async function POST(
   if (drawer.status !== "active") {
     return NextResponse.json({ error: "drawer_disabled" }, { status: 409 });
   }
+
+  // Prefer sheet stock over this isolate's seed quantities.
+  await pullStockFromSheets({ force: true });
 
   const stock = db.stock.get(drawer.id)!;
 

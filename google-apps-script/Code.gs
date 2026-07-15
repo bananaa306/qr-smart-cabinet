@@ -28,6 +28,9 @@ function doPost(e) {
       var n = syncSnapshot_(body.drawers || []);
       return json_({ ok: true, updated: n });
     }
+    if (body.type === 'inventory') {
+      return json_({ ok: true, drawers: readInventory_() });
+    }
     if (body.type === 'session_row') {
       var row = body.row || {};
       if (body.action === 'update') {
@@ -43,7 +46,43 @@ function doPost(e) {
 
 function doGet() {
   var t = locateTable_();
-  return json_({ ok: true, sheet: t ? t.sheet.getName() : null, rows: t ? t.rows.length : 0 });
+  return json_({
+    ok: true,
+    sheet: t ? t.sheet.getName() : null,
+    rows: t ? t.rows.length : 0,
+    drawers: t ? readInventory_() : [],
+  });
+}
+
+function readInventory_() {
+  var t = locateTable_();
+  if (!t) throw new Error('No sheet with a "Part" and "Quantity" header row found.');
+
+  var drawers = [];
+  for (var i = 0; i < t.rows.length; i++) {
+    var row = t.rows[i];
+    var number = t.col.drawer ? Number(row[t.col.drawer - 1]) : i + 1;
+    if (!number || isNaN(number)) continue;
+    var part = t.col.part ? String(row[t.col.part - 1] || '').trim() : '';
+    var quantity = t.col.quantity ? Number(row[t.col.quantity - 1]) : 0;
+    if (isNaN(quantity) || quantity < 0) quantity = 0;
+    var locked = true;
+    if (t.col.locked) {
+      var raw = row[t.col.locked - 1];
+      if (typeof raw === 'boolean') locked = raw;
+      else {
+        var s = String(raw).trim().toLowerCase();
+        locked = !(s === 'false' || s === '0' || s === 'no' || s === 'unlocked' || s === '');
+      }
+    }
+    drawers.push({
+      number: number,
+      part: part,
+      quantity: quantity,
+      locked: locked,
+    });
+  }
+  return drawers;
 }
 
 function syncSnapshot_(drawers) {
