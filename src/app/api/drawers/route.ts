@@ -15,10 +15,8 @@ export async function GET() {
   const user = await currentUser();
   if (!user) return NextResponse.json({ error: "unauthenticated" }, { status: 401 });
 
-  // Never stall the menu on a cold Apps Script. Give a warm script ~1s;
-  // if it misses, serve current store data and finish the pull after the
-  // response (Fluid / Node) so the next paint / soft-refresh is correct.
-  const quick = await pullStockFromSheets({ timeoutMs: 1000 });
+  // Give the sheet a few seconds on menu load before falling back to seed data.
+  const quick = await pullStockFromSheets({ timeoutMs: 3500 });
   if (!quick.ok && sheetsEnabled()) {
     after(() => {
       void pullStockFromSheets({ force: true, timeoutMs: 20000 });

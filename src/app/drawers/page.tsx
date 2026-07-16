@@ -124,6 +124,7 @@ function DrawersPageInner() {
   const openParam = searchParams.get("open");
   const [drawers, setDrawers] = useState<DrawerView[] | null>(null);
   const [sheets, setSheets] = useState(false);
+  const [loadingHint, setLoadingHint] = useState("Loading cabinet…");
   const [sessionName, setSessionName] = useState<string | null>(null);
   const [openIdx, setOpenIdx] = useState<number | null>(null);
   const [detailIdx, setDetailIdx] = useState<number | null>(null);
@@ -134,7 +135,11 @@ function DrawersPageInner() {
 
   const DETAIL_REVEAL_DELAY_MS = 320;
 
-  async function loadCabinet() {
+  async function fetchCabinet(): Promise<{
+    drawers: DrawerView[];
+    sheets: boolean;
+    sheetsFresh: boolean;
+  } | null> {
     const { ok, status, data } = await api<{
       drawers: DrawerView[];
       sheets: boolean;
@@ -145,24 +150,47 @@ function DrawersPageInner() {
       return null;
     }
     if (!ok) {
-      setDrawers([]);
-      return [];
+      return { drawers: [], sheets: false, sheetsFresh: false };
     }
-    setDrawers(data.drawers);
-    setSheets(data.sheets);
-    return data.drawers;
+    return {
+      drawers: data.drawers,
+      sheets: data.sheets,
+      sheetsFresh: data.sheetsFresh ?? false,
+    };
+  }
+
+  async function loadCabinet() {
+    const result = await fetchCabinet();
+    if (!result) return null;
+    setDrawers(result.drawers);
+    setSheets(result.sheets);
+    return result.drawers;
   }
 
   useEffect(() => {
     let cancelled = false;
     void (async () => {
-      const first = await loadCabinet();
-      if (cancelled || first === null) return;
-      // If the first paint raced a cold Apps Script, silently re-pull once
-      // after the background finish likely landed.
-      await new Promise((r) => setTimeout(r, 2200));
-      if (cancelled) return;
-      await loadCabinet();
+      const retryMs = [0, 800, 1500, 2200, 3000];
+      for (let i = 0; i < retryMs.length; i++) {
+        if (retryMs[i]! > 0) await new Promise((r) => setTimeout(r, retryMs[i]!));
+        if (cancelled) return;
+
+        const result = await fetchCabinet();
+        if (!result) return;
+
+        // When the sheet is configured, wait for a real pull — not demo seed names.
+        if (result.sheets && !result.sheetsFresh) {
+          setLoadingHint("Connecting to sheet…");
+          continue;
+        }
+
+        setDrawers(result.drawers);
+        setSheets(result.sheets);
+        setLoadingHint("Loading cabinet…");
+        return;
+      }
+
+      if (!cancelled) await loadCabinet();
     })();
     api<{ user: { name: string } | null }>("/api/auth/me").then(({ ok, data }) => {
       if (ok && data.user?.name) setSessionName(data.user.name);
@@ -291,7 +319,7 @@ function DrawersPageInner() {
           {drawers === null ? (
             <div className="smart-loading" role="status">
               <span className="spin h-7 w-7 rounded-full border-2" />
-              <span>Loading cabinet…</span>
+              <span>{loadingHint}</span>
             </div>
           ) : drawers.length === 0 ? (
             <p className="relative z-[1] mx-5 mt-24 rounded-2xl border border-[var(--smart-panel-border)] bg-[var(--smart-panel-bg)] p-5 text-center text-sm text-[var(--smart-sub)]">
