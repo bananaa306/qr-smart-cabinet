@@ -1,9 +1,16 @@
 import { NextResponse } from "next/server";
+import { after } from "next/server";
 import { audit, db, seed } from "@/lib/store";
 import { LIMITS, canAccessDrawer } from "@/lib/security";
 import { currentSession } from "@/lib/session";
 import { drawerView } from "@/lib/dto";
-import { logSessionRow, pullStockFromSheets, setSheetLocked } from "@/lib/sheets";
+import {
+  logSessionRow,
+  pullStockFromSheets,
+  setSheetLocked,
+  sheetsCacheFresh,
+  sheetsEnabled,
+} from "@/lib/sheets";
 
 // POST /api/drawers/{id}/lock — physical lock (no stock mutation).
 export async function POST(
@@ -27,7 +34,9 @@ export async function POST(
     return NextResponse.json({ error: "not_found" }, { status: 404 });
   }
 
-  await pullStockFromSheets({ timeoutMs: 1000 });
+  if (sheetsEnabled() && !sheetsCacheFresh()) {
+    await pullStockFromSheets({ timeoutMs: 400 });
+  }
 
   const stock = db.stock.get(drawer.id)!;
   const item = db.items.get(drawer.itemId);
@@ -35,7 +44,9 @@ export async function POST(
   const openSessionId = db.openDrawer.get(drawer.id);
   if (!openSessionId) {
     // Already locked in-app — still mirror Is Locked onto the inventory sheet.
-    void setSheetLocked(drawer, true);
+    after(() => {
+      void setSheetLocked(drawer, true);
+    });
     return NextResponse.json({ ok: true, locked: true, drawer: drawerView(drawer, stock) });
   }
 
@@ -52,21 +63,24 @@ export async function POST(
   }
   audit({ type: "lock.relocked_by_user", userId: user.id, drawerId: drawer.id });
 
-  await setSheetLocked(drawer, true);
-
-  // Session tracker row + inventory Is Locked column.
-  await logSessionRow(
-    {
-      name: visit.displayName,
-      sessionId: visit.trackerSessionId,
-      action: "Lock",
-      part: partName,
-      shelf: drawer.label,
-      quantity: unlockSession?.quantity || 0,
-      locked: true,
-    },
-    "update",
-  );
+  const qtyLogged = unlockSession?.quantity || 0;
+  after(() => {
+    void Promise.all([
+      setSheetLocked(drawer, true),
+      logSessionRow(
+        {
+          name: visit.displayName,
+          sessionId: visit.trackerSessionId!,
+          action: "Lock",
+          part: partName,
+          shelf: drawer.label,
+          quantity: qtyLogged,
+          locked: true,
+        },
+        "update",
+      ),
+    ]);
+  });
 
   return NextResponse.json({ ok: true, locked: true, drawer: drawerView(drawer, stock) });
 }

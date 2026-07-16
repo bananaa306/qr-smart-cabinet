@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { after } from "next/server";
 import { audit, db, id as newId, seed } from "@/lib/store";
 import {
   LIMITS,
@@ -11,7 +12,13 @@ import {
 import { currentSession } from "@/lib/session";
 import { drawerView } from "@/lib/dto";
 import { deviceOpen, issueUnlockCommand } from "@/lib/lock";
-import { logSessionRow, pullStockFromSheets, setSheetLocked } from "@/lib/sheets";
+import {
+  logSessionRow,
+  pullStockFromSheets,
+  setSheetLocked,
+  sheetsCacheFresh,
+  sheetsEnabled,
+} from "@/lib/sheets";
 
 interface Body {
   idempotencyKey?: unknown;
@@ -70,11 +77,15 @@ export async function POST(
     return NextResponse.json({ error: "drawer_disabled" }, { status: 409 });
   }
 
-  await pullStockFromSheets({ timeoutMs: 1000 });
+  if (sheetsEnabled() && !sheetsCacheFresh()) {
+    await pullStockFromSheets({ timeoutMs: 400 });
+  }
 
   if (db.openDrawer.has(drawer.id)) {
     const stock = db.stock.get(drawer.id)!;
-    void setSheetLocked(drawer, false);
+    after(() => {
+      void setSheetLocked(drawer, false);
+    });
     const payload = { ok: true, locked: false, drawer: drawerView(drawer, stock) };
     saveIdempotent(user.id, idempotencyKey, payload);
     return NextResponse.json(payload);
@@ -117,22 +128,28 @@ export async function POST(
   const item = db.items.get(drawer.itemId);
   const partName = item?.name ?? drawer.itemId;
 
-  await setSheetLocked(drawer, false);
-
-  await logSessionRow({
-    name: session.displayName,
-    sessionId: session.trackerSessionId,
-    action: "Unlock",
-    part: partName,
-    shelf: drawer.label,
-    quantity: 0,
-    locked: false,
-  });
-
   audit({ type: "unlock.granted", userId: user.id, drawerId: drawer.id, detail: "physical" });
 
   const stock = db.stock.get(drawer.id)!;
   const payload = { ok: true, locked: false, drawer: drawerView(drawer, stock) };
   saveIdempotent(user.id, idempotencyKey, payload);
+
+  const trackerName = session.displayName;
+  const trackerSessionId = session.trackerSessionId;
+  after(() => {
+    void Promise.all([
+      setSheetLocked(drawer, false),
+      logSessionRow({
+        name: trackerName,
+        sessionId: trackerSessionId,
+        action: "Unlock",
+        part: partName,
+        shelf: drawer.label,
+        quantity: 0,
+        locked: false,
+      }),
+    ]);
+  });
+
   return NextResponse.json(payload);
 }

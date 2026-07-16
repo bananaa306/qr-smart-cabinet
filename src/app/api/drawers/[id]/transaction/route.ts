@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { after } from "next/server";
 import { audit, db, id as newId, seed } from "@/lib/store";
 import {
   LIMITS,
@@ -10,7 +11,13 @@ import {
 } from "@/lib/security";
 import { currentSession } from "@/lib/session";
 import { drawerView } from "@/lib/dto";
-import { logSessionRow, pullStockFromSheets, setSheetQuantity } from "@/lib/sheets";
+import {
+  logSessionRow,
+  pullStockFromSheets,
+  setSheetQuantity,
+  sheetsCacheFresh,
+  sheetsEnabled,
+} from "@/lib/sheets";
 import type { Intent, Transaction } from "@/lib/types";
 
 interface Body {
@@ -89,8 +96,10 @@ export async function POST(
     return NextResponse.json({ error: "drawer_disabled" }, { status: 409 });
   }
 
-  // Prefer sheet stock, but don't block take/return on a cold script forever.
-  await pullStockFromSheets({ force: true, timeoutMs: 8000 });
+  // Prefer sheet stock when cache is stale — never stall take/return on a cold script.
+  if (sheetsEnabled() && !sheetsCacheFresh()) {
+    await pullStockFromSheets({ timeoutMs: 600 });
+  }
 
   const stock = db.stock.get(drawer.id)!;
 
@@ -156,19 +165,6 @@ export async function POST(
         ? "Take"
         : "Return";
 
-  await Promise.all([
-    setSheetQuantity(drawer, stock.quantity),
-    logSessionRow({
-      name: trackerName,
-      sessionId: trackerSessionId,
-      action,
-      part: partName,
-      shelf: drawer.label,
-      quantity,
-      locked: !drawerOpen,
-    }),
-  ]);
-
   audit({
     type: "transaction.recorded",
     userId: user.id,
@@ -187,5 +183,23 @@ export async function POST(
     drawer: drawerView(drawer, stock),
   };
   saveIdempotent(user.id, idempotencyKey, payload);
+
+  // Mirror to the sheet after the response — stock + ledger are already committed.
+  const qtyAfter = stock.quantity;
+  after(() => {
+    void Promise.all([
+      setSheetQuantity(drawer, qtyAfter),
+      logSessionRow({
+        name: trackerName,
+        sessionId: trackerSessionId,
+        action,
+        part: partName,
+        shelf: drawer.label,
+        quantity,
+        locked: !drawerOpen,
+      }),
+    ]);
+  });
+
   return NextResponse.json(payload);
 }
