@@ -12,9 +12,8 @@ import {
 import { currentSession } from "@/lib/session";
 import { drawerView } from "@/lib/dto";
 import {
-  logSessionRow,
   pullStockFromSheets,
-  setSheetQuantity,
+  setSheetTransaction,
   sheetsCacheFresh,
   sheetsEnabled,
 } from "@/lib/sheets";
@@ -187,18 +186,15 @@ export async function POST(
   // Mirror to the sheet after the response — stock + ledger are already committed.
   const qtyAfter = stock.quantity;
   after(() => {
-    void Promise.all([
-      setSheetQuantity(drawer, qtyAfter),
-      logSessionRow({
-        name: trackerName,
-        sessionId: trackerSessionId,
-        action,
-        part: partName,
-        shelf: drawer.label,
-        quantity,
-        locked: !drawerOpen,
-      }),
-    ]);
+    void setSheetTransaction(drawer, qtyAfter, {
+      name: trackerName,
+      sessionId: trackerSessionId,
+      action,
+      part: partName,
+      shelf: drawer.label,
+      quantity,
+      locked: !drawerOpen,
+    });
   });
 
   return NextResponse.json(payload);

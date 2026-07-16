@@ -118,17 +118,25 @@ function parseSheetsJson(text: string): unknown {
   }
 }
 
-async function postOk(payload: Record<string, unknown>): Promise<boolean> {
+async function postResult(
+  payload: Record<string, unknown>,
+): Promise<{ ok: boolean; error?: string }> {
   const res = await postToSheets(payload, { timeoutMs: 20000 });
-  if (!res) return false;
+  if (!res) return { ok: false, error: "fetch_failed" };
   try {
     const text = await res.text();
     const body = parseSheetsJson(text) as { error?: string; ok?: boolean };
-    if (body?.error && body.error !== "snapshot_disabled") return false;
-    return res.ok || res.status === 200;
+    if (body?.error && body.error !== "snapshot_disabled") {
+      return { ok: false, error: body.error };
+    }
+    return { ok: res.ok || res.status === 200 };
   } catch {
-    return false;
+    return { ok: false, error: "invalid_json" };
   }
+}
+
+async function postOk(payload: Record<string, unknown>): Promise<boolean> {
+  return (await postResult(payload)).ok;
 }
 
 function invalidatePullCache() {
@@ -334,6 +342,58 @@ export async function setSheetQuantity(
   invalidatePullCache();
   audit({ type: "sheets.qty_ok", drawerId: drawer.id, detail: String(quantity) });
   return true;
+}
+
+/**
+ * Take/return in one request: patch Quantity + write the session row together.
+ * Halves the Apps Script round-trips vs. two separate posts. Falls back to the
+ * legacy pair of calls if the deployed script predates the combined `tx` type.
+ */
+export async function setSheetTransaction(
+  drawer: Drawer,
+  quantity: number,
+  row: SessionRow,
+  rowAction: "append" | "update" = "append",
+): Promise<boolean> {
+  if (!sheetsEnabled()) return false;
+  const number = drawerNumber(drawer);
+  if (!number) return false;
+
+  const result = await postResult({
+    secret: SECRET,
+    type: "tx",
+    number,
+    quantity: Math.max(0, Math.floor(quantity)),
+    action: rowAction,
+    row: {
+      name: row.name,
+      sessionId: row.sessionId,
+      actionLabel: row.action,
+      part: row.part,
+      shelf: row.shelf,
+      quantity: row.quantity,
+      locked: row.locked,
+      time: row.time ?? new Date().toISOString(),
+    },
+  });
+
+  if (result.ok) {
+    invalidatePullCache();
+    audit({ type: "sheets.tx_ok", drawerId: drawer.id, detail: `${row.action} ${quantity}` });
+    return true;
+  }
+
+  // Older script without the combined endpoint — do the two writes in parallel.
+  if (result.error === "unknown_type") {
+    const [qtyOk] = await Promise.all([
+      setSheetQuantity(drawer, quantity),
+      logSessionRow(row, rowAction),
+    ]);
+    return qtyOk;
+  }
+
+  audit({ type: "sheets.tx_error", drawerId: drawer.id, detail: result.error ?? "failed" });
+  return false;
 }
 
 /** Patch Is Locked for one drawer only — does not rewrite Part or Quantity. */

@@ -53,6 +53,19 @@ function doPost(e) {
       }
       return json_({ ok: true, appended: appendSessionRow_(row) });
     }
+    // Combined take/return: patch Quantity + write the session row in one call.
+    if (body.type === 'tx') {
+      var out = { ok: true };
+      if (body.number != null && body.quantity != null) {
+        out.qtyUpdated = setQuantity_(body.number, body.quantity);
+      }
+      if (body.row) {
+        out.sessionUpdated = body.action === 'update'
+          ? updateSessionRow_(body.row)
+          : appendSessionRow_(body.row);
+      }
+      return json_(out);
+    }
     return json_({ error: 'unknown_type' });
   } catch (err) {
     return json_({ error: String(err) });
@@ -275,14 +288,17 @@ function appendSessionRow_(row) {
 
   var sheetRow = t.headerRow + t.rows.length + 1;
   var actionLabel = row.actionLabel || '';
-  if (t.col.name) t.sheet.getRange(sheetRow, t.col.name).setValue(row.name || '');
-  if (t.col.time) t.sheet.getRange(sheetRow, t.col.time).setValue(formatTime_(row.time));
-  if (t.col.sessionId) t.sheet.getRange(sheetRow, t.col.sessionId).setValue(row.sessionId || '');
-  if (t.col.action) t.sheet.getRange(sheetRow, t.col.action).setValue(actionLabel);
-  if (t.col.part) t.sheet.getRange(sheetRow, t.col.part).setValue(row.part || '');
-  if (t.col.shelf) t.sheet.getRange(sheetRow, t.col.shelf).setValue(row.shelf || '');
-  if (t.col.quantity) t.sheet.getRange(sheetRow, t.col.quantity).setValue(row.quantity || 0);
-  if (t.col.locked) t.sheet.getRange(sheetRow, t.col.locked).setValue(!!row.locked);
+  // One setValues write for the whole row beats 8 separate setValue calls.
+  var arr = new Array(t.width).fill('');
+  if (t.col.name) arr[t.col.name - 1] = row.name || '';
+  if (t.col.time) arr[t.col.time - 1] = formatTime_(row.time);
+  if (t.col.sessionId) arr[t.col.sessionId - 1] = row.sessionId || '';
+  if (t.col.action) arr[t.col.action - 1] = actionLabel;
+  if (t.col.part) arr[t.col.part - 1] = row.part || '';
+  if (t.col.shelf) arr[t.col.shelf - 1] = row.shelf || '';
+  if (t.col.quantity) arr[t.col.quantity - 1] = row.quantity || 0;
+  if (t.col.locked) arr[t.col.locked - 1] = !!row.locked;
+  t.sheet.getRange(sheetRow, 1, 1, t.width).setValues([arr]);
   colorSessionRow_(t, sheetRow, actionLabel, !!row.locked);
   return 1;
 }
@@ -316,25 +332,24 @@ function updateSessionRow_(row) {
 
   var sheetRow = t.headerRow + 1 + rowIdx;
   var actionLabel = row.actionLabel || '';
+  // Edit the in-memory row, then write it back in a single setValues call.
+  var arr = t.rows[rowIdx].slice();
   // Keep original check-in time on updates (e.g. Take → Take + Lock); only fill if blank.
-  if (t.col.time) {
-    var existingTime = t.rows[rowIdx][t.col.time - 1];
-    if (!existingTime) {
-      t.sheet.getRange(sheetRow, t.col.time).setValue(formatTime_(row.time));
-    }
+  if (t.col.time && !arr[t.col.time - 1]) {
+    arr[t.col.time - 1] = formatTime_(row.time);
   }
-  if (t.col.locked) t.sheet.getRange(sheetRow, t.col.locked).setValue(!!row.locked);
+  if (t.col.locked) arr[t.col.locked - 1] = !!row.locked;
   if (t.col.quantity && row.quantity != null && row.quantity !== 0) {
-    t.sheet.getRange(sheetRow, t.col.quantity).setValue(row.quantity);
+    arr[t.col.quantity - 1] = row.quantity;
   }
   if (t.col.shelf && row.shelf) {
-    t.sheet.getRange(sheetRow, t.col.shelf).setValue(row.shelf);
+    arr[t.col.shelf - 1] = row.shelf;
   }
   if (t.col.action) {
-    var existing = t.rows[rowIdx][t.col.action - 1];
-    actionLabel = mergeAction_(existing, row.actionLabel);
-    t.sheet.getRange(sheetRow, t.col.action).setValue(actionLabel);
+    actionLabel = mergeAction_(arr[t.col.action - 1], row.actionLabel);
+    arr[t.col.action - 1] = actionLabel;
   }
+  t.sheet.getRange(sheetRow, 1, 1, t.width).setValues([arr]);
   colorSessionRow_(t, sheetRow, actionLabel, !!row.locked);
   return 1;
 }
