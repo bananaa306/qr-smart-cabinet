@@ -66,6 +66,19 @@ function doPost(e) {
       }
       return json_(out);
     }
+    // Combined lock/unlock: patch Is Locked + write the session row in one call.
+    if (body.type === 'lock_tx') {
+      var lockOut = { ok: true };
+      if (body.number != null && body.locked != null) {
+        lockOut.lockUpdated = setLocked_(body.number, body.locked);
+      }
+      if (body.row) {
+        lockOut.sessionUpdated = body.action === 'update'
+          ? updateSessionRow_(body.row)
+          : appendSessionRow_(body.row);
+      }
+      return json_(lockOut);
+    }
     return json_({ error: 'unknown_type' });
   } catch (err) {
     return json_({ error: String(err) });

@@ -396,6 +396,64 @@ export async function setSheetTransaction(
   return false;
 }
 
+/**
+ * Lock/unlock in one request: patch Is Locked + write the session row together.
+ * Falls back to the legacy pair of calls if the deployed script lacks `lock_tx`.
+ */
+export async function setSheetLockEvent(
+  drawer: Drawer,
+  locked: boolean,
+  row: SessionRow,
+  rowAction: "append" | "update" = "append",
+): Promise<boolean> {
+  if (!sheetsEnabled()) return false;
+  const number = drawerNumber(drawer);
+  if (!number) return false;
+
+  const result = await postResult({
+    secret: SECRET,
+    type: "lock_tx",
+    number,
+    locked: Boolean(locked),
+    action: rowAction,
+    row: {
+      name: row.name,
+      sessionId: row.sessionId,
+      actionLabel: row.action,
+      part: row.part,
+      shelf: row.shelf,
+      quantity: row.quantity,
+      locked: row.locked,
+      time: row.time ?? new Date().toISOString(),
+    },
+  });
+
+  if (result.ok) {
+    invalidatePullCache();
+    audit({
+      type: "sheets.lock_tx_ok",
+      drawerId: drawer.id,
+      detail: `${row.action} ${locked ? "locked" : "unlocked"}`,
+    });
+    return true;
+  }
+
+  if (result.error === "unknown_type") {
+    const [lockOk] = await Promise.all([
+      setSheetLocked(drawer, locked),
+      logSessionRow(row, rowAction),
+    ]);
+    return lockOk;
+  }
+
+  audit({
+    type: "sheets.lock_tx_error",
+    drawerId: drawer.id,
+    detail: result.error ?? "failed",
+  });
+  return false;
+}
+
 /** Patch Is Locked for one drawer only — does not rewrite Part or Quantity. */
 export async function setSheetLocked(
   drawer: Drawer,

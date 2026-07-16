@@ -13,8 +13,8 @@ import { currentSession } from "@/lib/session";
 import { drawerView } from "@/lib/dto";
 import { deviceOpen, issueUnlockCommand } from "@/lib/lock";
 import {
-  logSessionRow,
   pullStockFromSheets,
+  setSheetLockEvent,
   setSheetLocked,
   sheetsCacheFresh,
   sheetsEnabled,
@@ -137,18 +137,15 @@ export async function POST(
   const trackerName = session.displayName;
   const trackerSessionId = session.trackerSessionId;
   after(() => {
-    void Promise.all([
-      setSheetLocked(drawer, false),
-      logSessionRow({
-        name: trackerName,
-        sessionId: trackerSessionId,
-        action: "Unlock",
-        part: partName,
-        shelf: drawer.label,
-        quantity: 0,
-        locked: false,
-      }),
-    ]);
+    void setSheetLockEvent(drawer, false, {
+      name: trackerName,
+      sessionId: trackerSessionId,
+      action: "Unlock",
+      part: partName,
+      shelf: drawer.label,
+      quantity: 0,
+      locked: false,
+    });
   });
 
   return NextResponse.json(payload);

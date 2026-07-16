@@ -5,8 +5,8 @@ import { LIMITS, canAccessDrawer } from "@/lib/security";
 import { currentSession } from "@/lib/session";
 import { drawerView } from "@/lib/dto";
 import {
-  logSessionRow,
   pullStockFromSheets,
+  setSheetLockEvent,
   setSheetLocked,
   sheetsCacheFresh,
   sheetsEnabled,
@@ -65,21 +65,20 @@ export async function POST(
 
   const qtyLogged = unlockSession?.quantity || 0;
   after(() => {
-    void Promise.all([
-      setSheetLocked(drawer, true),
-      logSessionRow(
-        {
-          name: visit.displayName,
-          sessionId: visit.trackerSessionId!,
-          action: "Lock",
-          part: partName,
-          shelf: drawer.label,
-          quantity: qtyLogged,
-          locked: true,
-        },
-        "update",
-      ),
-    ]);
+    void setSheetLockEvent(
+      drawer,
+      true,
+      {
+        name: visit.displayName,
+        sessionId: visit.trackerSessionId!,
+        action: "Lock",
+        part: partName,
+        shelf: drawer.label,
+        quantity: qtyLogged,
+        locked: true,
+      },
+      "update",
+    );
   });
 
   return NextResponse.json({ ok: true, locked: true, drawer: drawerView(drawer, stock) });
