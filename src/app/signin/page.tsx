@@ -1,16 +1,11 @@
 import { Suspense } from "react";
-import { redirect } from "next/navigation";
-import { currentUser } from "@/lib/session";
 import { SignInForm } from "./signin-form";
 
-function safeNextPath(raw: string | undefined): string | null {
-  if (!raw || !raw.startsWith("/") || raw.startsWith("//")) return null;
-  const deep = raw.match(/^\/d\/([^/?#]+)/i);
-  if (deep) return `/drawers?open=${encodeURIComponent(decodeURIComponent(deep[1]))}`;
-  return raw;
-}
-
-/** Plain fallback — do not import client shell components here (that 500s the RSC stream). */
+/**
+ * Plain fallback — never import client shell components here.
+ * That previously broke the RSC stream on cold join (digest 1465600122).
+ * Auth redirect lives in SignInForm so this page stays static-safe.
+ */
 function SignInFallback() {
   return (
     <div
@@ -25,23 +20,7 @@ function SignInFallback() {
   );
 }
 
-export default async function SignIn({
-  searchParams,
-}: {
-  searchParams: Promise<{ next?: string }>;
-}) {
-  let user = null;
-  try {
-    user = await currentUser();
-  } catch {
-    user = null;
-  }
-
-  const params = await searchParams;
-  if (user) {
-    redirect(safeNextPath(params.next) ?? "/drawers");
-  }
-
+export default function SignIn() {
   return (
     <Suspense fallback={<SignInFallback />}>
       <SignInForm />

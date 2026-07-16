@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import {
   buildSmartScreenStyle,
@@ -28,6 +28,18 @@ export function SignInForm() {
   const t = smartEspressoTheme;
   const accent = SMART_ACCENT;
   const ready = name.trim().length > 0;
+
+  // Client-side only — server cookies()+Suspense previously 500'd cold joins.
+  useEffect(() => {
+    let cancelled = false;
+    api<{ user: { name: string } | null }>("/api/auth/me").then(({ ok, data }) => {
+      if (cancelled || !ok || !data.user) return;
+      router.replace(safeNextPath(searchParams.get("next")));
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [router, searchParams]);
 
   async function startSession(e: React.FormEvent) {
     e.preventDefault();
