@@ -29,13 +29,27 @@ export function SignInForm() {
   const accent = SMART_ACCENT;
   const ready = name.trim().length > 0;
 
+  // Wake Apps Script while the user is on the check-in screen.
+  useEffect(() => {
+    void fetch("/api/sheets/preload", { credentials: "same-origin", cache: "no-store" });
+  }, []);
+
+  async function prefetchDrawers(maxMs = 2000) {
+    await Promise.race([
+      api("/api/drawers"),
+      new Promise<void>((resolve) => setTimeout(resolve, maxMs)),
+    ]);
+  }
+
   // Client-side only — server cookies()+Suspense previously 500'd cold joins.
   useEffect(() => {
     let cancelled = false;
-    api<{ user: { name: string } | null }>("/api/auth/me").then(({ ok, data }) => {
+    void (async () => {
+      const { ok, data } = await api<{ user: { name: string } | null }>("/api/auth/me");
       if (cancelled || !ok || !data.user) return;
-      router.replace(safeNextPath(searchParams.get("next")));
-    });
+      await prefetchDrawers(1500);
+      if (!cancelled) router.replace(safeNextPath(searchParams.get("next")));
+    })();
     return () => {
       cancelled = true;
     };
@@ -57,6 +71,7 @@ export function SignInForm() {
     });
 
     if (ok) {
+      await prefetchDrawers();
       router.replace(safeNextPath(searchParams.get("next")));
       return;
     }

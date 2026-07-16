@@ -4,7 +4,7 @@ import { db, seed } from "@/lib/store";
 import { canAccessDrawer } from "@/lib/security";
 import { currentUser } from "@/lib/session";
 import { drawerView } from "@/lib/dto";
-import { pullStockFromSheets, sheetsEnabled } from "@/lib/sheets";
+import { pullStockFromSheets, sheetsCacheFresh, sheetsEnabled } from "@/lib/sheets";
 
 // GET /api/drawers — the main menu. Lists only the drawers this user is
 // permitted to open (deny-by-default, §5.2) with their live stock. No other
@@ -15,8 +15,8 @@ export async function GET() {
   const user = await currentUser();
   if (!user) return NextResponse.json({ error: "unauthenticated" }, { status: 401 });
 
-  // Give the sheet a few seconds on menu load before falling back to seed data.
-  const quick = await pullStockFromSheets({ timeoutMs: 3500 });
+  // Cache hit returns instantly; cold starts get a short wait (preload usually warmed this).
+  const quick = await pullStockFromSheets({ timeoutMs: sheetsCacheFresh() ? 500 : 2500 });
   if (!quick.ok && sheetsEnabled()) {
     after(() => {
       void pullStockFromSheets({ force: true, timeoutMs: 20000 });

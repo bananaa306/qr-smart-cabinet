@@ -170,9 +170,11 @@ function DrawersPageInner() {
   useEffect(() => {
     let cancelled = false;
     void (async () => {
-      const retryMs = [0, 800, 1500, 2200, 3000];
-      for (let i = 0; i < retryMs.length; i++) {
-        if (retryMs[i]! > 0) await new Promise((r) => setTimeout(r, retryMs[i]!));
+      const POLL_MS = 350;
+      const MAX_POLLS = 18;
+
+      for (let i = 0; i < MAX_POLLS; i++) {
+        if (i > 0) await new Promise((r) => setTimeout(r, POLL_MS));
         if (cancelled) return;
 
         const result = await fetchCabinet();

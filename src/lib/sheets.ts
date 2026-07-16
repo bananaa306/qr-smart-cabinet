@@ -393,6 +393,11 @@ export function sheetsEnabled(): boolean {
   return Boolean(WEBHOOK_URL && SECRET);
 }
 
+/** True when this isolate already has a recent successful inventory pull. */
+export function sheetsCacheFresh(): boolean {
+  return lastPullOk && Date.now() - lastPullAt < PULL_CACHE_MS;
+}
+
 export function sheetsCacheAgeMs(): number | null {
   if (!lastPullOk || !lastPullAt) return null;
   return Date.now() - lastPullAt;

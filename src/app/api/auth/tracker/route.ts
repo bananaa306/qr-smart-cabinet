@@ -1,7 +1,9 @@
 import { NextResponse } from "next/server";
+import { after } from "next/server";
 import { audit, seed } from "@/lib/store";
 import { clientIp, rateLimit, LIMITS } from "@/lib/security";
 import { createTrackerSession, setSessionCookie } from "@/lib/session";
+import { pullStockFromSheets, sheetsEnabled } from "@/lib/sheets";
 
 interface TrackerBody {
   name?: unknown;
@@ -40,6 +42,13 @@ export async function POST(req: Request) {
       user: { id: userId, name: displayName, email: "" },
     });
     res.cookies.set(setSessionCookie(token, maxAge));
+
+    if (sheetsEnabled()) {
+      after(() => {
+        void pullStockFromSheets({ timeoutMs: 20000 });
+      });
+    }
+
     return res;
   } catch {
     return NextResponse.json({ error: "invalid_name" }, { status: 400 });
