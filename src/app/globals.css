@@ -245,55 +245,6 @@ body.smart-root {
   letter-spacing: -0.01em;
 }
 
-.smart-sync {
-  position: relative;
-  z-index: 2;
-  display: flex;
-  align-items: baseline;
-  justify-content: space-between;
-  gap: 12px;
-  margin: 0;
-  padding: 8px 22px 10px;
-  background: linear-gradient(
-    180deg,
-    rgba(29, 26, 22, 0.96) 0%,
-    rgba(29, 26, 22, 0.88) 70%,
-    rgba(29, 26, 22, 0) 100%
-  );
-  color: var(--smart-sub);
-  font-size: 11px;
-  font-weight: 500;
-  letter-spacing: 0.02em;
-  animation: fadeDown 400ms ease 80ms both;
-}
-
-.smart-sync-label {
-  min-width: 0;
-  flex: 1;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  color: rgba(242, 236, 221, 0.62);
-}
-
-.smart-sync button {
-  flex: 0 0 auto;
-  border: 0;
-  padding: 0;
-  background: transparent;
-  color: rgba(242, 236, 221, 0.88);
-  font-size: 11px;
-  font-weight: 600;
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
-  cursor: pointer;
-}
-
-.smart-sync button:disabled {
-  cursor: wait;
-  opacity: 0.55;
-}
-
 .smart-stage {
   position: relative;
   z-index: 1;
@@ -602,7 +553,7 @@ body.smart-root {
   padding: 8px 12px max(12px, env(safe-area-inset-bottom, 0px));
 }
 
-.smart-bottom-nav button {
+.smart-bottom-nav > button {
   display: flex;
   flex: 1;
   flex-direction: column;
@@ -612,6 +563,54 @@ body.smart-root {
   min-height: 52px;
   padding: 6px 8px;
   cursor: pointer;
+}
+
+.smart-bottom-center {
+  position: relative;
+  display: flex;
+  width: 82px;
+  flex: 0 0 82px;
+  align-items: center;
+  justify-content: center;
+}
+
+.smart-refresh-action {
+  position: absolute;
+  top: -29px;
+  left: 50%;
+  display: flex;
+  width: 68px;
+  height: 68px;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 3px;
+  border: 4px solid #2b2c2a;
+  border-radius: 50%;
+  background: var(--smart-accent);
+  box-shadow: 0 5px 14px rgba(0, 0, 0, 0.32);
+  color: #fffdf8;
+  transform: translateX(-50%);
+  cursor: pointer;
+}
+
+.smart-refresh-action span {
+  font-size: 9px;
+  font-weight: 750;
+  letter-spacing: 0.03em;
+  line-height: 1;
+}
+
+.smart-refresh-action:disabled {
+  cursor: wait;
+}
+
+.smart-refresh-action.state-ok {
+  background: #56574f;
+}
+
+.smart-refresh-action.state-err {
+  background: #9e2836;
 }
 
 .smart-bottom-nav .inactive {

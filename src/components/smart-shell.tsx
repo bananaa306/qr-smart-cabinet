@@ -44,9 +44,11 @@ export function buildSmartScreenStyle(
 export function BottomTabs({
   accent = SMART_ACCENT,
   active,
+  centerAction,
 }: {
   accent?: string;
   active: "drawers" | "activity";
+  centerAction?: React.ReactNode;
 }) {
   const router = useRouter();
 
@@ -64,6 +66,9 @@ export function BottomTabs({
         </div>
         <b style={active === "drawers" ? { color: accent } : undefined}>Drawers</b>
       </button>
+      {centerAction && (
+        <div className="smart-bottom-center">{centerAction}</div>
+      )}
       <button
         type="button"
         className={active === "activity" ? undefined : "inactive"}

@@ -317,12 +317,6 @@ function DrawersPageInner() {
             {sessionName && <SessionChip name={sessionName} />}
           </header>
 
-          <SyncBar
-            connected={sheets}
-            onRefreshed={(next) => setDrawers(applyLockHold(next))}
-            reload={loadCabinet}
-          />
-
           {drawers === null ? (
             <div className="smart-loading" role="status">
               <span className="spin h-7 w-7 rounded-full border-2" />
@@ -346,7 +340,20 @@ function DrawersPageInner() {
           )}
         </div>
 
-        {detailIdx === null && <BottomTabs accent={accent} active="drawers" />}
+        {detailIdx === null && (
+          <BottomTabs
+            accent={accent}
+            active="drawers"
+            centerAction={
+              sheets ? (
+                <SyncButton
+                  onRefreshed={(next) => setDrawers(applyLockHold(next))}
+                  reload={loadCabinet}
+                />
+              ) : undefined
+            }
+          />
+        )}
 
         <DrawerDetail
           drawer={detail}
@@ -363,21 +370,17 @@ function DrawersPageInner() {
   );
 }
 
-function SyncBar({
-  connected,
+function SyncButton({
   onRefreshed,
   reload,
 }: {
-  connected: boolean;
   onRefreshed: (drawers: DrawerView[]) => void;
   reload: () => Promise<DrawerView[] | null>;
 }) {
   const [state, setState] = useState<"idle" | "syncing" | "ok" | "err">("idle");
-  const [hint, setHint] = useState<string | null>(null);
 
   async function syncNow() {
     setState("syncing");
-    setHint(null);
     try {
       const sync = await api<{
         ok?: boolean;
@@ -389,7 +392,6 @@ function SyncBar({
       const next = await reload();
       if (!next) {
         setState("err");
-        setHint("Couldn’t reload drawers");
         setTimeout(() => setState("idle"), 2800);
         return;
       }
@@ -397,56 +399,58 @@ function SyncBar({
 
       if (!sync.data?.ok) {
         setState("err");
-        const err = sync.data?.error ?? "pull_failed";
-        setHint(
-          err === "not_configured"
-            ? "Sheets env vars missing on host"
-            : err === "forbidden"
-              ? "Sheets SECRET mismatch — check Script Properties"
-              : err === "unknown_type"
-                ? "Old Apps Script — paste Code.gs + New version deploy"
-                : err.startsWith("http_") || err === "fetch_failed"
-                  ? "Can’t reach Apps Script — check /exec URL"
-                  : `Sheet pull failed (${err})`,
-        );
       } else {
         setState("ok");
-        const sample = sync.data.parts?.find((p) => /wasd|3dwada/i.test(p));
-        setHint(
-          sample
-            ? `Sheet OK · ${sample}`
-            : `Sheet OK · ${sync.data.count ?? next.length} drawers`,
-        );
       }
     } catch {
       setState("err");
-      setHint("Network error");
     }
     setTimeout(() => {
       setState("idle");
-      setHint(null);
     }, 3200);
   }
 
   return (
-    <div className="smart-sync">
-      <div className="smart-sync-label">
-        {hint
-          ? hint
-          : connected
-            ? "Inventory from Google Sheet"
-            : "Local inventory"}
-      </div>
-      <button type="button" onClick={syncNow} disabled={state === "syncing"}>
+    <button
+      type="button"
+      className={`smart-refresh-action state-${state}`}
+      onClick={syncNow}
+      disabled={state === "syncing"}
+      aria-label="Refresh inventory from Google Sheet"
+    >
+      <svg
+        width="23"
+        height="23"
+        viewBox="0 0 24 24"
+        fill="none"
+        aria-hidden
+        className={state === "syncing" ? "spin" : undefined}
+      >
+        <path
+          d="M20 7v5h-5M4 17v-5h5"
+          stroke="currentColor"
+          strokeWidth="2"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+        />
+        <path
+          d="M18.5 9A7 7 0 0 0 6.1 6.8L4 12M5.5 15A7 7 0 0 0 17.9 17.2L20 12"
+          stroke="currentColor"
+          strokeWidth="2"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+        />
+      </svg>
+      <span>
         {state === "syncing"
-          ? "Syncing…"
+          ? "Syncing"
           : state === "ok"
             ? "Updated"
             : state === "err"
               ? "Retry"
               : "Refresh"}
-      </button>
-    </div>
+      </span>
+    </button>
   );
 }
 
