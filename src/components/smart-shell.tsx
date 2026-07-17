@@ -16,13 +16,13 @@ export interface SmartThemeTokens {
 }
 
 export const smartEspressoTheme: SmartThemeTokens = {
-  bg: "radial-gradient(ellipse 84% 46% at 62% 24%, rgba(244,238,225,0.48), rgba(244,238,225,0) 66%), linear-gradient(180deg, #C9BEAA 0%, #A99B84 100%)",
-  ink: "#1C2B4A",
-  sub: "#554E43",
-  line: "rgba(62,53,40,0.30)",
-  dot: "rgba(62,53,40,0.12)",
-  panelBg: "rgba(250,246,236,0.34)",
-  panelBorder: "rgba(62,53,40,0.20)",
+  bg: "radial-gradient(ellipse 82% 44% at 60% 30%, rgba(255,240,214,0.13), rgba(255,240,214,0) 64%), linear-gradient(180deg, #2C2822 0%, #1D1A16 100%)",
+  ink: "#F2ECDD",
+  sub: "#B7AF9E",
+  line: "rgba(242,236,221,0.30)",
+  dot: "rgba(242,236,221,0.09)",
+  panelBg: "rgba(242,236,221,0.06)",
+  panelBorder: "rgba(242,236,221,0.16)",
 };
 
 export function buildSmartScreenStyle(

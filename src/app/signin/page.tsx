@@ -12,7 +12,7 @@ function SignInFallback() {
       className="h-dvh"
       style={{
         background:
-          "radial-gradient(ellipse 84% 46% at 62% 24%, rgba(244,238,225,0.48), rgba(244,238,225,0) 66%), linear-gradient(180deg, #C9BEAA 0%, #A99B84 100%)",
+          "radial-gradient(ellipse 82% 44% at 60% 30%, rgba(255,240,214,0.13), rgba(255,240,214,0) 64%), linear-gradient(180deg, #2C2822 0%, #1D1A16 100%)",
       }}
       role="status"
       aria-label="Loading"

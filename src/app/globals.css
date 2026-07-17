@@ -76,10 +76,10 @@ body {
   text-rendering: optimizeLegibility;
 }
 
-/* Warm cabinet shell — keep first paint consistent with the ivory hardware. */
+/* Espresso shell — kill the old teal flash on first paint / QR scan-in. */
 body.smart-root {
-  background: #a99b84;
-  color: #1c2b4a;
+  background: #1d1a16;
+  color: #f2ecdd;
 }
 
 /* Focus ring for a11y (WCAG 2.2 AA, PRD §A.3) */
@@ -548,9 +548,8 @@ body.smart-root {
   display: flex;
   flex-shrink: 0;
   align-items: stretch;
-  border-top: 1px solid rgba(62, 53, 40, 0.22);
-  background-color: #ded4c2;
-  box-shadow: 0 -5px 18px rgba(62, 53, 40, 0.12);
+  border-top: 1px solid rgba(245, 240, 228, 0.14);
+  background-color: #2b2c2a;
   padding: 7px 12px max(10px, env(safe-area-inset-bottom, 0px));
 }
 
@@ -598,14 +597,14 @@ body.smart-root {
   width: 50px;
   height: 50px;
   place-items: center;
-  border: 3px solid #ded4c2;
+  border: 3px solid #2b2c2a;
   border-radius: 50%;
   background: var(--smart-accent);
   box-shadow: 0 4px 10px rgba(0, 0, 0, 0.28);
 }
 
 .smart-bottom-nav .smart-refresh-action b {
-  color: #554e43;
+  color: #c9c0ab;
   font-size: 9px;
   font-weight: 700;
   letter-spacing: 0.03em;
@@ -625,7 +624,7 @@ body.smart-root {
 }
 
 .smart-bottom-nav b {
-  color: #554e43;
+  color: #c9c0ab;
   font-size: 12px;
   font-weight: 700;
   line-height: 1.2;
@@ -880,7 +879,7 @@ body.smart-root {
 .smart-activity-icon span {
   width: 4px;
   border-radius: 1px;
-  background: #554e43;
+  background: #d8cfba;
 }
 
 .smart-activity-icon span:nth-child(1) {
