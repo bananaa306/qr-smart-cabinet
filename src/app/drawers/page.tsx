@@ -895,14 +895,11 @@ function DrawerDetail({
               handleDrop(event.dataTransfer.files);
             }}
           >
-            {photoPreview ? (
-              // eslint-disable-next-line @next/next/no-img-element
-              <img src={photoPreview} alt="" />
-            ) : drawer.item.photo ? (
-              // eslint-disable-next-line @next/next/no-img-element
-              <img src={drawer.item.photo} alt="" />
-            ) : null}
-            <span>Drop a photo of this item</span>
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img
+              src={photoPreview ?? "/wire-placeholder.svg"}
+              alt={photoPreview ? "Selected item preview" : "Assorted wire placeholder"}
+            />
             <input
               className="sr-only"
               type="file"

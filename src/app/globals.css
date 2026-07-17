@@ -1019,12 +1019,7 @@ body.smart-root {
   width: 100%;
   height: 100%;
   object-fit: cover;
-  opacity: 0.42;
-}
-
-.smart-photo-slot span {
-  position: relative;
-  z-index: 1;
+  opacity: 0.78;
 }
 
 .smart-detail-copy {
