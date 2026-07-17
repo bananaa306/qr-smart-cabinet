@@ -78,7 +78,7 @@ body {
 
 /* Warm cabinet shell — keep first paint consistent with the ivory hardware. */
 body.smart-root {
-  background: #ddd2bc;
+  background: #a99b84;
   color: #1c2b4a;
 }
 
@@ -548,9 +548,9 @@ body.smart-root {
   display: flex;
   flex-shrink: 0;
   align-items: stretch;
-  border-top: 1px solid rgba(74, 64, 47, 0.16);
-  background-color: #f3ecde;
-  box-shadow: 0 -5px 18px rgba(74, 64, 47, 0.08);
+  border-top: 1px solid rgba(62, 53, 40, 0.22);
+  background-color: #ded4c2;
+  box-shadow: 0 -5px 18px rgba(62, 53, 40, 0.12);
   padding: 7px 12px max(10px, env(safe-area-inset-bottom, 0px));
 }
 
@@ -598,14 +598,14 @@ body.smart-root {
   width: 50px;
   height: 50px;
   place-items: center;
-  border: 3px solid #f3ecde;
+  border: 3px solid #ded4c2;
   border-radius: 50%;
   background: var(--smart-accent);
   box-shadow: 0 4px 10px rgba(0, 0, 0, 0.28);
 }
 
 .smart-bottom-nav .smart-refresh-action b {
-  color: #6d6658;
+  color: #554e43;
   font-size: 9px;
   font-weight: 700;
   letter-spacing: 0.03em;
@@ -625,7 +625,7 @@ body.smart-root {
 }
 
 .smart-bottom-nav b {
-  color: #6d6658;
+  color: #554e43;
   font-size: 12px;
   font-weight: 700;
   line-height: 1.2;
@@ -880,7 +880,7 @@ body.smart-root {
 .smart-activity-icon span {
   width: 4px;
   border-radius: 1px;
-  background: #6d6658;
+  background: #554e43;
 }
 
 .smart-activity-icon span:nth-child(1) {
