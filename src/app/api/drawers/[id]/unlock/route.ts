@@ -13,6 +13,7 @@ import { currentSession } from "@/lib/session";
 import { drawerView } from "@/lib/dto";
 import { deviceOpen, issueUnlockCommand } from "@/lib/lock";
 import {
+  noteLocalLock,
   pullStockFromSheets,
   setSheetLockEvent,
   setSheetLocked,
@@ -83,6 +84,7 @@ export async function POST(
 
   if (db.openDrawer.has(drawer.id)) {
     const stock = db.stock.get(drawer.id)!;
+    noteLocalLock(drawer.id, false);
     after(() => {
       void setSheetLocked(drawer, false);
     });
@@ -124,6 +126,7 @@ export async function POST(
     intent: "take",
   });
   db.openDrawer.set(drawer.id, unlockSessionId);
+  noteLocalLock(drawer.id, false);
 
   const item = db.items.get(drawer.itemId);
   const partName = item?.name ?? drawer.itemId;

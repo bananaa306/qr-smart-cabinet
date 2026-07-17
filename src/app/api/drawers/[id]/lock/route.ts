@@ -5,6 +5,7 @@ import { LIMITS, canAccessDrawer } from "@/lib/security";
 import { currentSession } from "@/lib/session";
 import { drawerView } from "@/lib/dto";
 import {
+  noteLocalLock,
   pullStockFromSheets,
   setSheetLockEvent,
   setSheetLocked,
@@ -44,6 +45,7 @@ export async function POST(
   const openSessionId = db.openDrawer.get(drawer.id);
   if (!openSessionId) {
     // Already locked in-app — still mirror Is Locked onto the inventory sheet.
+    noteLocalLock(drawer.id, true);
     after(() => {
       void setSheetLocked(drawer, true);
     });
@@ -56,6 +58,7 @@ export async function POST(
   }
 
   db.openDrawer.delete(drawer.id);
+  noteLocalLock(drawer.id, true);
   db.drawerCooldown.set(drawer.id, Date.now() + LIMITS.drawerCooldownMs);
   if (unlockSession) {
     unlockSession.closedAt = Date.now();

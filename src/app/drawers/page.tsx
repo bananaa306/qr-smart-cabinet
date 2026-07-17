@@ -132,8 +132,23 @@ function DrawersPageInner() {
   const closeTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const openTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const openedFromScan = useRef(false);
+  /** Keep optimistic lock UI until sheet / other isolates catch up. */
+  const lockHold = useRef<Map<string, { locked: boolean; until: number }>>(new Map());
 
   const DETAIL_REVEAL_DELAY_MS = 320;
+
+  function applyLockHold(list: DrawerView[]): DrawerView[] {
+    const now = Date.now();
+    return list.map((d) => {
+      const hold = lockHold.current.get(d.id);
+      if (!hold || now >= hold.until) return d;
+      return hold.locked === d.locked ? d : { ...d, locked: hold.locked };
+    });
+  }
+
+  function rememberLock(id: string, locked: boolean) {
+    lockHold.current.set(id, { locked, until: Date.now() + 20_000 });
+  }
 
   async function fetchCabinet(): Promise<{
     drawers: DrawerView[];
@@ -162,7 +177,7 @@ function DrawersPageInner() {
   async function loadCabinet() {
     const result = await fetchCabinet();
     if (!result) return null;
-    setDrawers(result.drawers);
+    setDrawers(applyLockHold(result.drawers));
     setSheets(result.sheets);
     return result.drawers;
   }
@@ -186,7 +201,7 @@ function DrawersPageInner() {
           continue;
         }
 
-        setDrawers(result.drawers);
+        setDrawers(applyLockHold(result.drawers));
         setSheets(result.sheets);
         setLoadingHint("Loading cabinet…");
         return;
@@ -242,29 +257,12 @@ function DrawersPageInner() {
   const dotBg = `radial-gradient(${t.dot} 1px, transparent 1.2px)`;
   const detail = detailIdx !== null && drawers ? drawers[detailIdx] : null;
 
-  async function refreshDrawer(id: string) {
-    const { ok, data } = await api<{ drawer: DrawerView }>(
-      `/api/drawers/${encodeURIComponent(id)}`,
-    );
-    if (ok && data.drawer) {
-      updateDrawer(data.drawer);
-      return data.drawer;
-    }
-    return null;
-  }
-
   function openDrawer(i: number) {
     if (openTimer.current) clearTimeout(openTimer.current);
     if (closeTimer.current) clearTimeout(closeTimer.current);
     setDetailIdx(null);
     setDetailPhase("idle");
     setOpenIdx(i);
-
-    const current = drawers?.[i];
-    if (current) {
-      // Pull live Part / Quantity / Locked from the sheet into menu + detail.
-      void refreshDrawer(current.id);
-    }
 
     openTimer.current = setTimeout(() => {
       setDetailIdx(i);
@@ -289,9 +287,17 @@ function DrawersPageInner() {
   }
 
   function updateDrawer(next: DrawerView) {
+    const hold = lockHold.current.get(next.id);
+    const merged =
+      hold && Date.now() < hold.until ? { ...next, locked: hold.locked } : next;
     setDrawers((current) =>
-      current?.map((drawer) => (drawer.id === next.id ? next : drawer)) ?? current,
+      current?.map((drawer) => (drawer.id === merged.id ? merged : drawer)) ?? current,
     );
+  }
+
+  function setDrawerLock(next: DrawerView, locked: boolean) {
+    rememberLock(next.id, locked);
+    updateDrawer({ ...next, locked });
   }
 
   return (
@@ -314,7 +320,7 @@ function DrawersPageInner() {
           <SyncBar
             connected={sheets}
             accent={accent}
-            onRefreshed={(next) => setDrawers(next)}
+            onRefreshed={(next) => setDrawers(applyLockHold(next))}
             reload={loadCabinet}
           />
 
@@ -351,6 +357,7 @@ function DrawersPageInner() {
           t={t}
           onClose={closeDrawer}
           onUpdated={updateDrawer}
+          onLockChange={setDrawerLock}
         />
       </main>
     </div>
@@ -639,6 +646,7 @@ function DrawerDetail({
   t,
   onClose,
   onUpdated,
+  onLockChange,
 }: {
   drawer: DrawerView | null;
   index: number | null;
@@ -647,6 +655,7 @@ function DrawerDetail({
   t: ThemeTokens;
   onClose: () => void;
   onUpdated: (drawer: DrawerView) => void;
+  onLockChange: (drawer: DrawerView, locked: boolean) => void;
 }) {
   const [mode, setMode] = useState<Intent>("take");
   const [qty, setQty] = useState(1);
@@ -717,6 +726,8 @@ function DrawerDetail({
     setLockWorking(true);
     setError(null);
     setSlideX(wantOpen ? 1 : 0);
+    // Optimistic — don't wait for the sheet (or a stale refresh) to flip the label.
+    onLockChange(drawer, !wantOpen);
 
     const path = wantOpen
       ? `/api/drawers/${encodeURIComponent(drawer.id)}/unlock`
@@ -735,16 +746,21 @@ function DrawerDetail({
     setLockWorking(false);
     lockIdemKey.current = uuid();
 
-    if (ok && data.drawer) {
-      onUpdated(data.drawer);
-      setSlideX(data.drawer.locked ? 0 : 1);
+    if (ok) {
+      if (data.drawer) {
+        onLockChange(data.drawer, data.drawer.locked);
+        setSlideX(data.drawer.locked ? 0 : 1);
+      } else {
+        setSlideX(wantOpen ? 1 : 0);
+      }
       return;
     }
     if (httpStatus === 401) {
       window.location.href = "/signin";
       return;
     }
-    // revert slide
+    // revert slide + lock hold
+    onLockChange(drawer, !currentlyOpen);
     setSlideX(currentlyOpen ? 1 : 0);
     if (data.drawer) onUpdated(data.drawer);
     const messages: Record<string, string> = {

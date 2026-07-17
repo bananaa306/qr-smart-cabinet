@@ -24,6 +24,18 @@ let lastPullOk = false;
 let inflightPull: Promise<{ ok: boolean; error?: string; count?: number }> | null =
   null;
 
+/**
+ * After a lock/unlock mutation, ignore sheet Is Locked for a short window so a
+ * slow inventory pull can't wipe the local openDrawer state before the
+ * background sheet write lands.
+ */
+const LOCK_HOLD_MS = 20_000;
+const recentLockHold = new Map<string, { locked: boolean; until: number }>();
+
+export function noteLocalLock(drawerId: string, locked: boolean) {
+  recentLockHold.set(drawerId, { locked, until: Date.now() + LOCK_HOLD_MS });
+}
+
 export type SessionAction =
   | "Lock"
   | "Unlock"
@@ -313,9 +325,28 @@ function applySheetRowsToStore(rows: SheetDrawerRow[]) {
     }
 
     if (row.locked) {
-      db.openDrawer.delete(drawer.id);
+      const hold = recentLockHold.get(drawer.id);
+      if (hold && Date.now() < hold.until) {
+        // Keep the post-mutation lock state until the sheet write catches up.
+        if (hold.locked) db.openDrawer.delete(drawer.id);
+        else if (!db.openDrawer.has(drawer.id)) {
+          db.openDrawer.set(drawer.id, "sheet-open");
+        }
+      } else {
+        db.openDrawer.delete(drawer.id);
+      }
     } else if (!db.openDrawer.has(drawer.id)) {
-      db.openDrawer.set(drawer.id, "sheet-open");
+      const hold = recentLockHold.get(drawer.id);
+      if (hold && Date.now() < hold.until && hold.locked) {
+        // Local just locked — don't reopen from a stale sheet row.
+      } else {
+        db.openDrawer.set(drawer.id, "sheet-open");
+      }
+    } else {
+      const hold = recentLockHold.get(drawer.id);
+      if (hold && Date.now() < hold.until && hold.locked) {
+        db.openDrawer.delete(drawer.id);
+      }
     }
   }
 }
