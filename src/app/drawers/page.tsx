@@ -418,38 +418,32 @@ function SyncButton({
       disabled={state === "syncing"}
       aria-label="Refresh inventory from Google Sheet"
     >
-      <svg
-        width="23"
-        height="23"
-        viewBox="0 0 24 24"
-        fill="none"
-        aria-hidden
-        className={state === "syncing" ? "spin" : undefined}
-      >
-        <path
-          d="M20 7v5h-5M4 17v-5h5"
-          stroke="currentColor"
-          strokeWidth="2"
-          strokeLinecap="round"
-          strokeLinejoin="round"
-        />
-        <path
-          d="M18.5 9A7 7 0 0 0 6.1 6.8L4 12M5.5 15A7 7 0 0 0 17.9 17.2L20 12"
-          stroke="currentColor"
-          strokeWidth="2"
-          strokeLinecap="round"
-          strokeLinejoin="round"
-        />
-      </svg>
-      <span>
-        {state === "syncing"
-          ? "Syncing"
-          : state === "ok"
-            ? "Updated"
-            : state === "err"
-              ? "Retry"
-              : "Refresh"}
+      <span className="smart-refresh-circle">
+        <svg
+          width="21"
+          height="21"
+          viewBox="0 0 24 24"
+          fill="none"
+          aria-hidden
+          className={state === "syncing" ? "spin" : undefined}
+        >
+          <path
+            d="M20 7v5h-5M4 17v-5h5"
+            stroke="currentColor"
+            strokeWidth="2"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          />
+          <path
+            d="M18.5 9A7 7 0 0 0 6.1 6.8L4 12M5.5 15A7 7 0 0 0 17.9 17.2L20 12"
+            stroke="currentColor"
+            strokeWidth="2"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          />
+        </svg>
       </span>
+      <b>{state === "err" ? "Retry" : "Refresh"}</b>
     </button>
   );
 }

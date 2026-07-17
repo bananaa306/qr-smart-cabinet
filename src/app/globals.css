@@ -550,7 +550,7 @@ body.smart-root {
   align-items: stretch;
   border-top: 1px solid rgba(245, 240, 228, 0.14);
   background-color: #2b2c2a;
-  padding: 8px 12px max(12px, env(safe-area-inset-bottom, 0px));
+  padding: 7px 12px max(10px, env(safe-area-inset-bottom, 0px));
 }
 
 .smart-bottom-nav > button {
@@ -559,44 +559,54 @@ body.smart-root {
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 6px;
-  min-height: 52px;
-  padding: 6px 8px;
+  gap: 5px;
+  min-height: 48px;
+  padding: 5px 8px;
   cursor: pointer;
 }
 
 .smart-bottom-center {
   position: relative;
   display: flex;
-  width: 82px;
-  flex: 0 0 82px;
+  width: 68px;
+  flex: 0 0 68px;
   align-items: center;
   justify-content: center;
 }
 
 .smart-refresh-action {
   position: absolute;
-  top: -29px;
+  top: -20px;
   left: 50%;
   display: flex;
-  width: 68px;
-  height: 68px;
+  width: 62px;
+  height: 70px;
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 3px;
-  border: 4px solid #2b2c2a;
-  border-radius: 50%;
-  background: var(--smart-accent);
-  box-shadow: 0 5px 14px rgba(0, 0, 0, 0.32);
+  gap: 4px;
+  border: 0;
+  background: transparent;
   color: #fffdf8;
   transform: translateX(-50%);
   cursor: pointer;
 }
 
-.smart-refresh-action span {
+.smart-refresh-circle {
+  display: grid;
+  width: 50px;
+  height: 50px;
+  place-items: center;
+  border: 3px solid #2b2c2a;
+  border-radius: 50%;
+  background: var(--smart-accent);
+  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.28);
+}
+
+.smart-bottom-nav .smart-refresh-action b {
+  color: #c9c0ab;
   font-size: 9px;
-  font-weight: 750;
+  font-weight: 700;
   letter-spacing: 0.03em;
   line-height: 1;
 }
@@ -605,11 +615,7 @@ body.smart-root {
   cursor: wait;
 }
 
-.smart-refresh-action.state-ok {
-  background: #56574f;
-}
-
-.smart-refresh-action.state-err {
+.smart-refresh-action.state-err .smart-refresh-circle {
   background: #9e2836;
 }
 
