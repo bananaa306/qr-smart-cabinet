@@ -430,43 +430,21 @@ function SyncBar({
 
   return (
     <div className="smart-sync">
-      <span
-        className={`smart-sync-dot${connected ? " is-connected" : ""}`}
-        aria-hidden
-      />
       <div className="smart-sync-label">
         {hint
           ? hint
           : connected
-            ? "Google Sheet connected"
+            ? "Inventory from Google Sheet"
             : "Local inventory"}
       </div>
-      <button onClick={syncNow} disabled={state === "syncing"}>
-        <svg
-          width="14"
-          height="14"
-          viewBox="0 0 24 24"
-          fill="none"
-          aria-hidden
-          className={state === "syncing" ? "spin" : undefined}
-        >
-          <path
-            d="M20 11a8 8 0 0 0-14.7-4.4L4 9m0 0V4m0 5h5M4 13a8 8 0 0 0 14.7 4.4L20 15m0 0v5m0-5h-5"
-            stroke="currentColor"
-            strokeWidth="1.8"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-          />
-        </svg>
-        <span>
-          {state === "syncing"
-            ? "Syncing"
-            : state === "ok"
-              ? "Synced"
-              : state === "err"
-                ? "Retry"
-                : "Sync"}
-        </span>
+      <button type="button" onClick={syncNow} disabled={state === "syncing"}>
+        {state === "syncing"
+          ? "Syncing…"
+          : state === "ok"
+            ? "Updated"
+            : state === "err"
+              ? "Retry"
+              : "Refresh"}
       </button>
     </div>
   );

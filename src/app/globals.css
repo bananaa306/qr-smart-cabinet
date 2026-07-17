@@ -247,31 +247,24 @@ body.smart-root {
 
 .smart-sync {
   position: relative;
-  z-index: 1;
+  z-index: 2;
   display: flex;
-  align-items: center;
-  gap: 8px;
-  margin: 1px 22px 3px;
-  padding: 5px 0 7px;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  margin: 0;
+  padding: 8px 22px 10px;
+  background: linear-gradient(
+    180deg,
+    rgba(29, 26, 22, 0.96) 0%,
+    rgba(29, 26, 22, 0.88) 70%,
+    rgba(29, 26, 22, 0) 100%
+  );
   color: var(--smart-sub);
   font-size: 11px;
   font-weight: 500;
-  letter-spacing: 0.025em;
+  letter-spacing: 0.02em;
   animation: fadeDown 400ms ease 80ms both;
-}
-
-.smart-sync-dot {
-  width: 6px;
-  height: 6px;
-  flex: 0 0 auto;
-  border-radius: 50%;
-  background: var(--smart-sub);
-  opacity: 0.6;
-}
-
-.smart-sync-dot.is-connected {
-  background: #5ca36e;
-  opacity: 1;
 }
 
 .smart-sync-label {
@@ -280,25 +273,25 @@ body.smart-root {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+  color: rgba(242, 236, 221, 0.62);
 }
 
 .smart-sync button {
-  display: inline-flex;
-  align-items: center;
-  gap: 5px;
+  flex: 0 0 auto;
   border: 0;
-  padding: 3px 0 3px 8px;
+  padding: 0;
   background: transparent;
-  color: var(--smart-ink);
+  color: rgba(242, 236, 221, 0.88);
   font-size: 11px;
   font-weight: 600;
-  letter-spacing: 0.025em;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
   cursor: pointer;
 }
 
 .smart-sync button:disabled {
   cursor: wait;
-  opacity: 0.65;
+  opacity: 0.55;
 }
 
 .smart-stage {
