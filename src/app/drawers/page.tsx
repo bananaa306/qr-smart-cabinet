@@ -43,13 +43,13 @@ const INK = "#1C2B4A";
 
 const themes: Record<ThemeName, ThemeTokens> = {
   Espresso: {
-    bg: "radial-gradient(ellipse 82% 44% at 60% 30%, rgba(255,240,214,0.13), rgba(255,240,214,0) 64%), linear-gradient(180deg, #2C2822 0%, #1D1A16 100%)",
-    ink: "#F2ECDD",
-    sub: "#B7AF9E",
-    line: "rgba(242,236,221,0.30)",
-    dot: "rgba(242,236,221,0.09)",
-    panelBg: "rgba(242,236,221,0.06)",
-    panelBorder: "rgba(242,236,221,0.16)",
+    bg: "radial-gradient(ellipse 86% 48% at 62% 24%, rgba(255,255,250,0.86), rgba(255,255,250,0) 66%), linear-gradient(180deg, #EEE7D8 0%, #DDD2BC 100%)",
+    ink: "#1C2B4A",
+    sub: "#6D6658",
+    line: "rgba(74,64,47,0.24)",
+    dot: "rgba(74,64,47,0.10)",
+    panelBg: "rgba(255,253,247,0.58)",
+    panelBorder: "rgba(74,64,47,0.16)",
   },
   Sage: {
     bg: "radial-gradient(ellipse 78% 42% at 62% 34%, rgba(255,255,249,0.5), rgba(255,255,249,0) 68%), linear-gradient(178deg, #BAC3AD 0%, #A2AD91 100%)",

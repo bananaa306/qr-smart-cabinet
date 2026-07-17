@@ -7,11 +7,11 @@ export const metadata: Metadata = {
 };
 
 export const viewport: Viewport = {
-  themeColor: "#1D1A16",
+  themeColor: "#DDD2BC",
   width: "device-width",
   initialScale: 1,
   maximumScale: 1,
-  colorScheme: "dark",
+  colorScheme: "light",
 };
 
 export default function RootLayout({
