@@ -250,27 +250,55 @@ body.smart-root {
   z-index: 1;
   display: flex;
   align-items: center;
-  gap: 10px;
-  margin: 0 20px 6px;
-  border: 1px solid var(--smart-panel-border);
-  border-radius: 12px;
-  padding: 9px 12px;
-  background: var(--smart-panel-bg);
+  gap: 8px;
+  margin: 1px 22px 3px;
+  padding: 5px 0 7px;
   color: var(--smart-sub);
-  font-size: 12.5px;
+  font-size: 11px;
   font-weight: 500;
+  letter-spacing: 0.025em;
   animation: fadeDown 400ms ease 80ms both;
 }
 
+.smart-sync-dot {
+  width: 6px;
+  height: 6px;
+  flex: 0 0 auto;
+  border-radius: 50%;
+  background: var(--smart-sub);
+  opacity: 0.6;
+}
+
+.smart-sync-dot.is-connected {
+  background: #5ca36e;
+  opacity: 1;
+}
+
+.smart-sync-label {
+  min-width: 0;
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .smart-sync button {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
   border: 0;
-  border-radius: 999px;
-  padding: 6px 13px;
-  color: #fffdf8;
-  font-size: 12px;
-  font-weight: 700;
-  letter-spacing: 0.02em;
+  padding: 3px 0 3px 8px;
+  background: transparent;
+  color: var(--smart-ink);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.025em;
   cursor: pointer;
+}
+
+.smart-sync button:disabled {
+  cursor: wait;
+  opacity: 0.65;
 }
 
 .smart-stage {
