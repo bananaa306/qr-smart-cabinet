@@ -897,8 +897,17 @@ function DrawerDetail({
           >
             {/* eslint-disable-next-line @next/next/no-img-element */}
             <img
-              src={photoPreview ?? "/wire-placeholder.svg"}
-              alt={photoPreview ? "Selected item preview" : "Assorted wire placeholder"}
+              src={
+                photoPreview ||
+                (drawer.item.photo?.trim() ? drawer.item.photo : "/wire-placeholder.svg")
+              }
+              alt={
+                photoPreview
+                  ? "Selected item preview"
+                  : drawer.item.photo?.trim()
+                    ? drawer.item.name
+                    : "Assorted wire placeholder"
+              }
             />
             <input
               className="sr-only"

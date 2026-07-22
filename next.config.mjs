@@ -13,7 +13,7 @@ const nextConfig = {
       "default-src 'self'",
       scriptSrc,
       "style-src 'self' 'unsafe-inline'",
-      "img-src 'self' data: blob: https://images.unsplash.com",
+      "img-src 'self' data: blob: https://images.unsplash.com https://drive.google.com https://*.googleusercontent.com https://lh3.googleusercontent.com",
       isProd ? "connect-src 'self'" : "connect-src 'self' ws: wss: http: https:",
       isProd ? "frame-ancestors 'none'" : "frame-ancestors *",
       "base-uri 'self'",

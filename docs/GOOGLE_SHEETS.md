@@ -1,9 +1,9 @@
 # Google Sheets as inventory source
 
 When `SHEETS_WEBHOOK_URL` and `SHEETS_SECRET` are set, the **inventory sheet
-owns Part, Quantity, and Is Locked**. The app reads those columns before showing
-drawers and before take/return. It never rewrites Part or Locked from seeded
-app data.
+owns Part, Quantity, Is Locked, and Image**. The app reads those columns before
+showing drawers and before take/return. It never rewrites Part, Locked, or Image
+from seeded app data.
 
 Take/return **only** patch the Quantity cell for that drawer. Session tracker
 rows are append-only (separate sheet).
@@ -30,11 +30,30 @@ rows are append-only (separate sheet).
 
 **Inventory**
 
-| Drawer | Part | Quantity | Is Locked |
-|--------|------|----------|-----------|
-| 1 | Cat6 Patch Cable 1m | 64 | TRUE |
+| # Drawer | Part | Quantity | Is Locked | Image |
+|----------|------|----------|-----------|-------|
+| 1 | Cat6 Patch Cable 1m | 64 | TRUE | _(image in cell)_ |
 
 Drawer numbers must match app labels (`Drawer 1` → `1`).
+
+### Image column (example 2)
+
+Add a column headed **Image** (also accepts Photo / Img / Picture). Upload the
+picture **into that single cell**:
+
+1. Select the cell under **Image** for that drawer.
+2. **Insert → Image → Image in cell** (not “Image over cells”).
+3. Pick the file. It should sit inside the cell like example 2.
+
+Also supported:
+
+- `=IMAGE("https://…")` formulas
+- Plain `https://…` links
+- Google Drive file links / file ids (shared so the script can read them)
+
+After uploading, tap **Refresh** in the app (or wait for the next inventory pull).
+The drawer detail photo updates from the sheet; empty Image cells keep the wire
+placeholder.
 
 **Session tracker**
 
@@ -42,8 +61,8 @@ Drawer numbers must match app labels (`Drawer 1` → `1`).
 
 ## Behavior
 
-- **Read:** `inventory` → fills the UI from the sheet.
-- **Take/return:** `set_quantity` → updates that row’s Quantity only.
+- **Read:** `inventory` → fills the UI from the sheet (including Image).
+- **Take/return:** `set_quantity` / `tx` → updates that row’s Quantity only.
 - **Refresh button:** pulls from the sheet again (does not push inventory).
 - **Lock/unlock:** patches inventory **Is Locked** and appends/updates the session
   tracker. Redeploy Apps Script with **New version** after `Code.gs` changes.
@@ -58,8 +77,8 @@ strong concurrency, use PostgreSQL later and keep Sheets as ops UI.
 
 The Apps Script **Web App** cold-starts slowly (often 5–15s). The app mitigates this:
 
-1. **Menu load** waits ≤1s for Sheets, then returns immediately and finishes the
-   pull in the background; the drawers page soft-refreshes once after ~2s.
+1. **Menu load** waits briefly for Sheets, then returns and finishes the pull in
+   the background; the drawers page soft-refreshes until data is fresh.
 2. **In-flight dedupe + 30s cache** so concurrent requests don’t pile on.
 3. **Cron warmup** (`/api/sheets/warmup` once daily via `vercel.json`) pings
    Apps Script so it has a chance to stay warm. On **Vercel Pro** you can change

@@ -7,10 +7,10 @@
  * SHEETS_WEBHOOK_URL and the same secret in SHEETS_SECRET on the app side.
  *
  * Inventory sheet (one row per drawer) — owned in Sheets:
- *     Drawer | Part | Quantity | Is Locked
+ *     Drawer | Part | Quantity | Is Locked | Image
  *
- * The app reads inventory; take/return only patch Quantity (set_quantity).
- * Full snapshot overwrites are disabled.
+ * Image column: Insert → Image → Image in cell (example 2), or =IMAGE("url"),
+ * or a plain https / Drive link. The app shows that photo on the drawer.
  *
  * Session tracker sheet (append-only from the app):
  *     Name | Time | Session ID | Action | Part | Shelf | Quantity | Locked?
@@ -134,14 +134,89 @@ function readInventory_() {
         locked = !(s === 'false' || s === '0' || s === 'no' || s === 'unlocked' || s === '');
       }
     }
+    var sheetRow = t.headerRow + 1 + i;
+    var photo = t.col.image ? readCellImageUrl_(t.sheet, sheetRow, t.col.image, number) : '';
     drawers.push({
       number: number,
       part: part,
       quantity: quantity,
       locked: locked,
+      photo: photo,
     });
   }
   return drawers;
+}
+
+/**
+ * Resolve an Image cell to a URL the web app can show.
+ * Supports: Image in cell (CellImage), =IMAGE("url"), https links, Drive file ids.
+ */
+function readCellImageUrl_(sheet, sheetRow, imageCol, drawerNumber) {
+  var range = sheet.getRange(sheetRow, imageCol);
+  var formula = String(range.getFormula() || '');
+  if (formula) {
+    var m = formula.match(/^=\s*IMAGE\s*\(\s*["']([^"']+)["']/i);
+    if (m && m[1]) return normalizeImageUrl_(m[1]);
+  }
+
+  var value = range.getValue();
+  if (value == null || value === '') return '';
+
+  if (typeof value === 'string') {
+    return normalizeImageUrl_(value.trim());
+  }
+
+  // Insert → Image → Image in cell → CellImage object
+  try {
+    if (typeof value.getContentUrl === 'function') {
+      return cellImageToDataUrl_(value, drawerNumber);
+    }
+  } catch (e) {
+    // fall through
+  }
+
+  return '';
+}
+
+function normalizeImageUrl_(raw) {
+  if (!raw) return '';
+  var s = String(raw).trim();
+  if (!s) return '';
+  if (/^https?:\/\//i.test(s) || /^data:image\//i.test(s)) return s;
+
+  // Drive share / open links → direct view URL
+  var drive = s.match(/\/(?:file\/d\/|open\?id=)([a-zA-Z0-9_-]{20,})/);
+  if (drive) return 'https://drive.google.com/uc?export=view&id=' + drive[1];
+
+  // Bare Drive file id
+  if (/^[a-zA-Z0-9_-]{25,}$/.test(s)) {
+    return 'https://drive.google.com/uc?export=view&id=' + s;
+  }
+  return '';
+}
+
+/** Turn a CellImage into a data URL (stable for the browser; no extra Drive share). */
+function cellImageToDataUrl_(cellImage, drawerNumber) {
+  var contentUrl = cellImage.getContentUrl();
+  if (!contentUrl) return '';
+
+  var resp = UrlFetchApp.fetch(contentUrl, {
+    muteHttpExceptions: true,
+    followRedirects: true,
+  });
+  if (resp.getResponseCode() < 200 || resp.getResponseCode() >= 300) {
+    // Browser may still load the content URL if the deployment can see it.
+    return contentUrl;
+  }
+
+  var blob = resp.getBlob();
+  var bytes = blob.getBytes();
+  // Cap payload so inventory JSON stays reasonable for nine drawers.
+  if (bytes.length > 750000) return contentUrl;
+
+  var contentType = blob.getContentType() || 'image/png';
+  if (contentType.indexOf('image/') !== 0) contentType = 'image/png';
+  return 'data:' + contentType + ';base64,' + Utilities.base64Encode(bytes);
 }
 
 /** Write only Quantity for one drawer. Never touches Part or Is Locked. */
@@ -220,11 +295,12 @@ function locateTable_() {
     var col = {};
     for (var c = 0; c < headers.length; c++) {
       var h = String(headers[c] == null ? '' : headers[c]).trim().toLowerCase();
-      if (h === 'drawer' || h === 'drawer #' || h === 'drawer number') col.drawer = c + 1;
+      if (h === 'drawer' || h === 'drawer #' || h === 'drawer number' || h === '# drawer') col.drawer = c + 1;
       else if ((h === '#' || h === 'no' || h === 'no.') && !col.drawer) col.drawer = c + 1;
       else if (h === 'part' || h === 'item' || h === 'parts' || h === 'item name') col.part = c + 1;
       else if (h === 'quantity' || h === 'qty' || h === 'stock' || h === 'count') col.quantity = c + 1;
       else if (h === 'is locked' || h === 'locked' || h === 'locked?') col.locked = c + 1;
+      else if (h === 'image' || h === 'photo' || h === 'img' || h === 'picture') col.image = c + 1;
       else if (h === 'session id' || h === 'sessionid') col.sessionId = c + 1;
     }
     // Must be inventory (Part + Quantity), not the session tracker tab.

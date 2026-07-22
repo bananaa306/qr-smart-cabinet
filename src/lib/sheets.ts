@@ -63,6 +63,9 @@ export interface SheetDrawerRow {
   part: string;
   quantity: number;
   locked: boolean;
+  /** Image URL, data URL, or Drive view link from the sheet Image column. */
+  photo?: string;
+  image?: string;
 }
 
 async function postToSheets(
@@ -317,10 +320,16 @@ function applySheetRowsToStore(rows: SheetDrawerRow[]) {
     }
 
     const part = String(row.part ?? "").trim();
-    if (part) {
+    if (part || row.photo !== undefined || row.image !== undefined) {
       const item = db.items.get(drawer.itemId);
       if (item) {
-        db.items.set(drawer.itemId, { ...item, name: part });
+        const next = { ...item };
+        if (part) next.name = part;
+        if (row.photo !== undefined || row.image !== undefined) {
+          // Empty clears seed Unsplash so the wire placeholder shows.
+          next.photo = String(row.photo ?? row.image ?? "").trim();
+        }
+        db.items.set(drawer.itemId, next);
       }
     }
 
