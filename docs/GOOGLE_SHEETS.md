@@ -38,22 +38,21 @@ Drawer numbers must match app labels (`Drawer 1` → `1`).
 
 ### Image column (example 2)
 
-Add a column headed **Image** (also accepts Photo / Img / Picture). Upload the
-picture **into that single cell**:
+Add a column headed **Image** (also accepts Photo / Img / Picture).
 
-1. Select the cell under **Image** for that drawer.
+**Preferred (Image in cell):**
+1. Select the Image cell for that drawer.
 2. **Insert → Image → Image in cell** (not “Image over cells”).
-3. Pick the file. It should sit inside the cell like example 2.
+3. Pick the file so it sits *inside* the cell.
 
-Also supported:
+**Also works now:** floating **Image over cells** anchored on that row’s Image
+column, `=IMAGE("https://…")`, plain https links, and Drive links.
 
-- `=IMAGE("https://…")` formulas
-- Plain `https://…` links
-- Google Drive file links / file ids (shared so the script can read them)
-
-After uploading, tap **Refresh** in the app (or wait for the next inventory pull).
-The drawer detail photo updates from the sheet; empty Image cells keep the wire
+After uploading, tap **Refresh** in the app. Empty Image cells keep the wire
 placeholder.
+
+If the photo still doesn’t show after a **New version** deploy: delete the
+floating image and re-insert with **Image in cell**, then Refresh again.
 
 **Session tracker**
 

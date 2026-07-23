@@ -135,7 +135,7 @@ function readInventory_() {
       }
     }
     var sheetRow = t.headerRow + 1 + i;
-    var photo = t.col.image ? readCellImageUrl_(t.sheet, sheetRow, t.col.image, number) : '';
+    var photo = t.col.image ? readCellImageUrl_(t.sheet, sheetRow, t.col.image) : '';
     drawers.push({
       number: number,
       part: part,
@@ -149,7 +149,10 @@ function readInventory_() {
 
 /**
  * Resolve an Image cell to a URL the web app can show.
- * Supports: Image in cell (CellImage), =IMAGE("url"), https links, Drive file ids.
+ * Supports:
+ *   - Insert → Image → Image in cell (CellImage)
+ *   - Insert → Image → Image over cells (floating OverGridImage)
+ *   - =IMAGE("url"), https links, Drive file ids
  */
 function readCellImageUrl_(sheet, sheetRow, imageCol, drawerNumber) {
   var range = sheet.getRange(sheetRow, imageCol);
@@ -160,22 +163,62 @@ function readCellImageUrl_(sheet, sheetRow, imageCol, drawerNumber) {
   }
 
   var value = range.getValue();
-  if (value == null || value === '') return '';
-
-  if (typeof value === 'string') {
+  if (typeof value === 'string' && value.trim()) {
     return normalizeImageUrl_(value.trim());
   }
 
   // Insert → Image → Image in cell → CellImage object
   try {
-    if (typeof value.getContentUrl === 'function') {
-      return cellImageToDataUrl_(value, drawerNumber);
+    if (value && typeof value.getContentUrl === 'function') {
+      var fromCell = cellImageToDataUrl_(value);
+      if (fromCell) return fromCell;
     }
   } catch (e) {
-    // fall through
+    // fall through to overlay scan
   }
 
+  // Floating images ("Image over cells") — common when Image in cell wasn't used.
+  var fromOverlay = findOverlayImageUrl_(sheet, sheetRow, imageCol);
+  if (fromOverlay) return fromOverlay;
+
   return '';
+}
+
+/** Match a floating sheet image whose anchor sits on / near this Image cell. */
+function findOverlayImageUrl_(sheet, sheetRow, imageCol) {
+  var images;
+  try {
+    images = sheet.getImages();
+  } catch (e) {
+    return '';
+  }
+  if (!images || !images.length) return '';
+
+  var best = null;
+  var bestScore = 999;
+  for (var i = 0; i < images.length; i++) {
+    var img = images[i];
+    var anchor;
+    try {
+      anchor = img.getAnchorCell();
+    } catch (e2) {
+      continue;
+    }
+    if (!anchor) continue;
+    var r = anchor.getRow();
+    var c = anchor.getColumn();
+    // Prefer exact Image-cell anchors; allow 1-col drift (common with float placement).
+    var rowDist = Math.abs(r - sheetRow);
+    var colDist = Math.abs(c - imageCol);
+    if (rowDist > 1 || colDist > 1) continue;
+    var score = rowDist * 10 + colDist;
+    if (score < bestScore) {
+      bestScore = score;
+      best = img;
+    }
+  }
+  if (!best) return '';
+  return overGridImageToDataUrl_(best);
 }
 
 function normalizeImageUrl_(raw) {
@@ -195,8 +238,8 @@ function normalizeImageUrl_(raw) {
   return '';
 }
 
-/** Turn a CellImage into a data URL (stable for the browser; no extra Drive share). */
-function cellImageToDataUrl_(cellImage, drawerNumber) {
+/** Turn a CellImage into a data URL (stable for the browser). */
+function cellImageToDataUrl_(cellImage) {
   var contentUrl = cellImage.getContentUrl();
   if (!contentUrl) return '';
 
@@ -205,15 +248,34 @@ function cellImageToDataUrl_(cellImage, drawerNumber) {
     followRedirects: true,
   });
   if (resp.getResponseCode() < 200 || resp.getResponseCode() >= 300) {
-    // Browser may still load the content URL if the deployment can see it.
     return contentUrl;
   }
 
-  var blob = resp.getBlob();
+  return blobToDataUrl_(resp.getBlob());
+}
+
+/** Floating OverGridImage → data URL via getBlob() (no UrlFetch needed). */
+function overGridImageToDataUrl_(img) {
+  try {
+    if (typeof img.getUrl === 'function') {
+      var linked = img.getUrl();
+      if (linked) return normalizeImageUrl_(linked);
+    }
+  } catch (e) {
+    // continue to blob
+  }
+  try {
+    return blobToDataUrl_(img.getBlob());
+  } catch (e2) {
+    return '';
+  }
+}
+
+function blobToDataUrl_(blob) {
+  if (!blob) return '';
   var bytes = blob.getBytes();
   // Cap payload so inventory JSON stays reasonable for nine drawers.
-  if (bytes.length > 750000) return contentUrl;
-
+  if (!bytes || bytes.length === 0 || bytes.length > 750000) return '';
   var contentType = blob.getContentType() || 'image/png';
   if (contentType.indexOf('image/') !== 0) contentType = 'image/png';
   return 'data:' + contentType + ';base64,' + Utilities.base64Encode(bytes);
