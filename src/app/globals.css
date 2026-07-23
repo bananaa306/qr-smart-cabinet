@@ -842,6 +842,15 @@ body.smart-root {
   opacity: 0.55;
 }
 
+.smart-cabinet-boot {
+  pointer-events: none;
+  opacity: 0.72;
+}
+
+.smart-cabinet-boot .smart-drawer-face {
+  animation: none !important;
+}
+
 .smart-loading {
   display: flex;
   flex: 1;

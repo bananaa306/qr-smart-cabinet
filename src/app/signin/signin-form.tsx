@@ -29,26 +29,26 @@ export function SignInForm() {
   const accent = SMART_ACCENT;
   const ready = name.trim().length > 0;
 
-  // Wake Apps Script while the user is on the check-in screen.
+  // Prefetch the cabinet route + warm serverless while they type their name.
   useEffect(() => {
+    router.prefetch("/drawers");
     void fetch("/api/sheets/preload", { credentials: "same-origin", cache: "no-store" });
-  }, []);
+    void fetch("/api/auth/me", { credentials: "same-origin", cache: "no-store" });
+  }, [router]);
 
-  async function prefetchDrawers(maxMs = 2000) {
-    await Promise.race([
-      api("/api/drawers"),
-      new Promise<void>((resolve) => setTimeout(resolve, maxMs)),
-    ]);
-  }
-
-  // Client-side only — server cookies()+Suspense previously 500'd cold joins.
+  // Already signed in — jump straight to the cabinet.
   useEffect(() => {
     let cancelled = false;
     void (async () => {
       const { ok, data } = await api<{ user: { name: string } | null }>("/api/auth/me");
       if (cancelled || !ok || !data.user) return;
-      // Navigate immediately; drawers page + preload warm the sheet.
-      void prefetchDrawers(800);
+      if (data.user.name) {
+        try {
+          sessionStorage.setItem("cab_session_name", data.user.name);
+        } catch {
+          // ignore
+        }
+      }
       if (!cancelled) router.replace(safeNextPath(searchParams.get("next")));
     })();
     return () => {
@@ -66,14 +66,20 @@ export function SignInForm() {
 
     setWorking(true);
     setError(null);
+    const next = safeNextPath(searchParams.get("next"));
     const { ok, status } = await api("/api/auth/tracker", {
       method: "POST",
       body: JSON.stringify({ name: trimmed }),
     });
 
     if (ok) {
-      void prefetchDrawers(500);
-      router.replace(safeNextPath(searchParams.get("next")));
+      try {
+        sessionStorage.setItem("cab_session_name", trimmed);
+      } catch {
+        // ignore
+      }
+      // Navigate immediately — do not wait on drawers/sheet fetches.
+      router.replace(next);
       return;
     }
     setWorking(false);

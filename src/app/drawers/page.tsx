@@ -15,7 +15,6 @@ import type { DrawerView } from "@/lib/dto";
 
 type Intent = "take" | "return";
 type Accent = "#CF2233" | "#1F5FA8" | "#1C2B4A";
-type ThemeName = "Espresso" | "Sage" | "Clay" | "Slate" | "Navy";
 type DetailPhase = "idle" | "enter" | "shown" | "exit";
 
 /** Drive uc?export=view links often 404 in <img>; thumbnails work when shared. */
@@ -55,56 +54,36 @@ interface TxResult {
 
 const INK = "#1C2B4A";
 
-const themes: Record<ThemeName, ThemeTokens> = {
-  Espresso: {
-    bg: "radial-gradient(ellipse 82% 44% at 60% 30%, rgba(255,240,214,0.13), rgba(255,240,214,0) 64%), linear-gradient(180deg, #2C2822 0%, #1D1A16 100%)",
-    ink: "#F2ECDD",
-    sub: "#B7AF9E",
-    line: "rgba(242,236,221,0.30)",
-    dot: "rgba(242,236,221,0.09)",
-    panelBg: "rgba(242,236,221,0.06)",
-    panelBorder: "rgba(242,236,221,0.16)",
-  },
-  Sage: {
-    bg: "radial-gradient(ellipse 78% 42% at 62% 34%, rgba(255,255,249,0.5), rgba(255,255,249,0) 68%), linear-gradient(178deg, #BAC3AD 0%, #A2AD91 100%)",
-    ink: "#2C3327",
-    sub: "#4F573F",
-    line: "rgba(44,51,39,0.30)",
-    dot: "rgba(44,51,39,0.10)",
-    panelBg: "rgba(255,255,248,0.42)",
-    panelBorder: "rgba(44,51,39,0.16)",
-  },
-  Clay: {
-    bg: "radial-gradient(ellipse 78% 42% at 62% 34%, rgba(255,249,240,0.5), rgba(255,249,240,0) 68%), linear-gradient(178deg, #CFB49D 0%, #B99A7F 100%)",
-    ink: "#3B2C22",
-    sub: "#61493A",
-    line: "rgba(59,44,34,0.28)",
-    dot: "rgba(59,44,34,0.10)",
-    panelBg: "rgba(255,251,244,0.44)",
-    panelBorder: "rgba(59,44,34,0.16)",
-  },
-  Slate: {
-    bg: "radial-gradient(ellipse 78% 42% at 62% 34%, rgba(255,252,246,0.55), rgba(255,252,246,0) 68%), linear-gradient(178deg, #E9EDF6 0%, #D7DEEE 46%, #BFC9E0 100%)",
-    ink: "#1C2B4A",
-    sub: "#4A5670",
-    line: "rgba(28,43,74,0.30)",
-    dot: "rgba(28,43,74,0.09)",
-    panelBg: "rgba(255,253,248,0.55)",
-    panelBorder: "rgba(28,43,74,0.14)",
-  },
-  Navy: {
-    bg: "radial-gradient(ellipse 82% 44% at 60% 32%, rgba(180,205,240,0.12), rgba(180,205,240,0) 64%), linear-gradient(180deg, #1B2740 0%, #121B31 100%)",
-    ink: "#EAF0FA",
-    sub: "#9FAAC4",
-    line: "rgba(234,240,250,0.28)",
-    dot: "rgba(234,240,250,0.08)",
-    panelBg: "rgba(234,240,250,0.06)",
-    panelBorder: "rgba(234,240,250,0.16)",
-  },
-};
-
 const fronts = ["#FFFDF8", "#F7F0DF", "#FBF6EC"];
 const borders = ["#E6DCC4", "#DFD3B6", "#E4DAC1"];
+
+/** Instant first paint after sign-in — replaced as soon as /api/drawers returns. */
+function bootDrawers(): DrawerView[] {
+  return Array.from({ length: 9 }, (_, i) => ({
+    id: `__boot_${i + 1}`,
+    cabinet: "Cabinet A",
+    label: `Drawer ${i + 1}`,
+    location: "…",
+    status: "active" as const,
+    locked: true,
+    item: {
+      id: `__boot_item_${i + 1}`,
+      name: "Loading…",
+      unit: "item",
+      photo: "",
+    },
+    quantity: 0,
+    stockVersion: 0,
+  }));
+}
+
+function readCachedSessionName(): string | null {
+  try {
+    return sessionStorage.getItem("cab_session_name");
+  } catch {
+    return null;
+  }
+}
 
 export default function DrawersPage() {
   return (
@@ -117,14 +96,30 @@ export default function DrawersPage() {
 function DrawersBoot() {
   const t = smartEspressoTheme;
   const accent = SMART_ACCENT;
+  const boot = bootDrawers();
+  const rulerBg = `repeating-linear-gradient(180deg, ${t.line} 0px, ${t.line} 1.5px, transparent 1.5px, transparent 70px), repeating-linear-gradient(180deg, ${t.dot} 0px, ${t.dot} 1px, transparent 1px, transparent 14px)`;
+  const dotBg = `radial-gradient(${t.dot} 1px, transparent 1.2px)`;
   return (
     <div className="h-dvh overflow-hidden" style={{ background: t.bg }}>
       <main className="smart-screen" style={buildSmartScreenStyle(t, accent)}>
-        <RooseveltIslandScene />
         <div className="smart-screen-body">
-          <div className="smart-loading" role="status">
-            <span className="spin h-7 w-7 rounded-full border-2" />
-            <span>Loading cabinet…</span>
+          <header className="smart-header">
+            <div>
+              <div className="smart-eyebrow">NYC FIRST</div>
+              <h1>Smart Cabinet</h1>
+            </div>
+          </header>
+          <div className="smart-cabinet-boot">
+            <CabinetStage
+              drawers={boot}
+              accent={accent}
+              openIdx={null}
+              stagger={0}
+              rulerBg={rulerBg}
+              dotBg={dotBg}
+              line={t.line}
+              onOpen={() => {}}
+            />
           </div>
         </div>
       </main>
@@ -136,10 +131,10 @@ function DrawersPageInner() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const openParam = searchParams.get("open");
-  const [drawers, setDrawers] = useState<DrawerView[] | null>(null);
+  const [drawers, setDrawers] = useState<DrawerView[]>(() => bootDrawers());
+  const [ready, setReady] = useState(false);
   const [sheets, setSheets] = useState(false);
-  const [loadingHint, setLoadingHint] = useState("Loading cabinet…");
-  const [sessionName, setSessionName] = useState<string | null>(null);
+  const [sessionName, setSessionName] = useState<string | null>(() => readCachedSessionName());
   const [openIdx, setOpenIdx] = useState<number | null>(null);
   const [detailIdx, setDetailIdx] = useState<number | null>(null);
   const [detailPhase, setDetailPhase] = useState<DetailPhase>("idle");
@@ -193,33 +188,37 @@ function DrawersPageInner() {
     if (!result) return null;
     setDrawers(applyLockHold(result.drawers));
     setSheets(result.sheets);
+    setReady(true);
     return result.drawers;
   }
 
   useEffect(() => {
     let cancelled = false;
     void (async () => {
-      // Paint immediately from whatever the server has; soft-refresh while sheet warms.
       const first = await fetchCabinet();
       if (cancelled || !first) return;
       setDrawers(applyLockHold(first.drawers));
       setSheets(first.sheets);
-      setLoadingHint("Loading cabinet…");
+      setReady(true);
 
+      // One quiet follow-up if the sheet is still warming — don't spam the menu.
       if (!first.sheets || first.sheetsFresh) return;
-
-      for (let i = 0; i < 8; i++) {
-        await new Promise((r) => setTimeout(r, 700));
-        if (cancelled) return;
-        const next = await fetchCabinet();
-        if (!next) return;
-        setDrawers(applyLockHold(next.drawers));
-        setSheets(next.sheets);
-        if (next.sheetsFresh) return;
-      }
+      await new Promise((r) => setTimeout(r, 1200));
+      if (cancelled) return;
+      const next = await fetchCabinet();
+      if (!next) return;
+      setDrawers(applyLockHold(next.drawers));
+      setSheets(next.sheets);
     })();
     api<{ user: { name: string } | null }>("/api/auth/me").then(({ ok, data }) => {
-      if (ok && data.user?.name) setSessionName(data.user.name);
+      if (ok && data.user?.name) {
+        setSessionName(data.user.name);
+        try {
+          sessionStorage.setItem("cab_session_name", data.user.name);
+        } catch {
+          // ignore
+        }
+      }
     });
     return () => {
       cancelled = true;
@@ -267,6 +266,7 @@ function DrawersPageInner() {
   const detail = detailIdx !== null && drawers ? drawers[detailIdx] : null;
 
   function openDrawer(i: number) {
+    if (!ready) return;
     if (openTimer.current) clearTimeout(openTimer.current);
     if (closeTimer.current) clearTimeout(closeTimer.current);
     setDetailIdx(null);
@@ -324,26 +324,23 @@ function DrawersPageInner() {
             {sessionName && <SessionChip name={sessionName} />}
           </header>
 
-          {drawers === null ? (
-            <div className="smart-loading" role="status">
-              <span className="spin h-7 w-7 rounded-full border-2" />
-              <span>{loadingHint}</span>
-            </div>
-          ) : drawers.length === 0 ? (
+          {drawers.length === 0 ? (
             <p className="relative z-[1] mx-5 mt-24 rounded-2xl border border-[var(--smart-panel-border)] bg-[var(--smart-panel-bg)] p-5 text-center text-sm text-[var(--smart-sub)]">
               No drawers available for your account.
             </p>
           ) : (
-            <CabinetStage
-              drawers={drawers}
-              accent={accent}
-              openIdx={openIdx}
-              stagger={40}
-              rulerBg={rulerBg}
-              dotBg={dotBg}
-              line={t.line}
-              onOpen={openDrawer}
-            />
+            <div className={ready ? undefined : "smart-cabinet-boot"}>
+              <CabinetStage
+                drawers={drawers}
+                accent={accent}
+                openIdx={openIdx}
+                stagger={ready ? 40 : 0}
+                rulerBg={rulerBg}
+                dotBg={dotBg}
+                line={t.line}
+                onOpen={openDrawer}
+              />
+            </div>
           )}
         </div>
 
