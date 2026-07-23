@@ -404,7 +404,16 @@ function SyncButton({
 
       if (!sync.data?.ok) {
         setState("err");
-        setHint(sync.data?.error || "Sync failed");
+        const err = sync.data?.error || "Sync failed";
+        setHint(
+          err === "webhook_gone"
+            ? "Sheet link broken"
+            : err === "not_configured"
+              ? "Sheets not set"
+              : err === "fetch_failed"
+                ? "Sheet offline"
+                : err,
+        );
       } else {
         setState("ok");
         const n = sync.data.photos ?? 0;

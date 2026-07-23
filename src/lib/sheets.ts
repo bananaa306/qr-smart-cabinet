@@ -228,6 +228,17 @@ async function pullOnce(opts?: {
     return { ok: false, error: "read_body_failed" };
   }
 
+  // Dead Apps Script deployment returns Google HTML 404 — not JSON.
+  if (
+    res.status === 404 ||
+    /Page Not Found/i.test(text) ||
+    /^\s*<!DOCTYPE html/i.test(text)
+  ) {
+    audit({ type: "sheets.pull_error", detail: "webhook_gone" });
+    lastPullOk = false;
+    return { ok: false, error: "webhook_gone" };
+  }
+
   let body: {
     drawers?: SheetDrawerRow[];
     error?: string;
