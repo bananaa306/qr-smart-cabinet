@@ -18,6 +18,20 @@ type Accent = "#CF2233" | "#1F5FA8" | "#1C2B4A";
 type ThemeName = "Espresso" | "Sage" | "Clay" | "Slate" | "Navy";
 type DetailPhase = "idle" | "enter" | "shown" | "exit";
 
+/** Drive uc?export=view links often 404 in <img>; thumbnails work when shared. */
+function toDisplayPhotoUrl(raw: string): string {
+  const s = raw.trim();
+  if (!s) return "";
+  const id =
+    s.match(/[?&]id=([a-zA-Z0-9_-]{20,})/)?.[1] ||
+    s.match(/\/file\/d\/([a-zA-Z0-9_-]{20,})/)?.[1] ||
+    s.match(/\/d\/([a-zA-Z0-9_-]{20,})(?:\/|$)/)?.[1];
+  if (id && /drive\.google\.com|googleusercontent\.com/i.test(s)) {
+    return `https://drive.google.com/thumbnail?id=${id}&sz=w1600`;
+  }
+  return s;
+}
+
 interface ThemeTokens {
   bg: string;
   ink: string;
@@ -874,7 +888,7 @@ function DrawerDetail({
   if (!drawer || index === null) return null;
 
   const sheetPhoto = drawer.item.photo?.trim() || "";
-  const photoSrc = sheetPhoto || "/wire-placeholder.svg";
+  const photoSrc = toDisplayPhotoUrl(sheetPhoto) || "/wire-placeholder.svg";
   const photoAlt = sheetPhoto ? drawer.item.name : "Assorted wire placeholder";
 
   return (
@@ -912,7 +926,7 @@ function DrawerDetail({
         <div className="smart-photo-pad">
           <div className="smart-photo-slot" aria-hidden={!sheetPhoto}>
             {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img src={photoSrc} alt={photoAlt} />
+            <img src={photoSrc} alt={photoAlt} referrerPolicy="no-referrer" />
           </div>
         </div>
 

@@ -205,9 +205,13 @@ function readCellImageDetail_(sheet, sheetRow, imageCol) {
   if (formula) {
     var m = formula.match(/^=\s*IMAGE\s*\(\s*["']([^"']+)["']/i);
     if (m && m[1]) {
-      detail.url = normalizeImageUrl_(m[1]);
+      detail.url = resolveImageUrl_(m[1], detail);
       detail.source = detail.url ? 'formula' : 'none';
-      if (!detail.url) detail.error = 'bad_formula_url';
+      if (!detail.url && !detail.error) detail.error = 'bad_formula_url';
+      // Rewrite to a browser-friendly Drive thumbnail URL when possible.
+      if (detail.url && detail.url.indexOf('http') === 0) {
+        persistImageFormula_(range, detail.url);
+      }
       return detail;
     }
   }
@@ -220,7 +224,7 @@ function readCellImageDetail_(sheet, sheetRow, imageCol) {
       : String(value);
 
   if (typeof value === 'string' && value.trim()) {
-    var asUrl = normalizeImageUrl_(value.trim());
+    var asUrl = resolveImageUrl_(value.trim(), detail);
     if (asUrl) {
       detail.url = asUrl;
       detail.source = 'url';
@@ -330,21 +334,65 @@ function findOverlayImageUrl_(sheet, sheetRow, imageCol, detail) {
   return overGridImageToHostedUrl_(best, sheet.getSheetId() + '!r' + sheetRow, detail);
 }
 
-function normalizeImageUrl_(raw) {
+function extractDriveId_(raw) {
+  var s = String(raw || '').trim();
+  if (!s) return '';
+  var m =
+    s.match(/[?&]id=([a-zA-Z0-9_-]{20,})/) ||
+    s.match(/\/file\/d\/([a-zA-Z0-9_-]{20,})/) ||
+    s.match(/\/d\/([a-zA-Z0-9_-]{20,})(?:\/|$)/);
+  if (m) return m[1];
+  if (/^[a-zA-Z0-9_-]{25,}$/.test(s)) return s;
+  return '';
+}
+
+/** Browser-friendly Drive image URL (works in <img> when file is link-shared). */
+function publicDriveImageUrl_(fileId) {
+  return 'https://drive.google.com/thumbnail?id=' + fileId + '&sz=w1600';
+}
+
+/**
+ * Turn any raw image reference into a URL the web app can load.
+ * Drive links are opened as the script owner, shared "anyone with link",
+ * and copied into the QR photo folder when needed.
+ */
+function resolveImageUrl_(raw, detail) {
   if (!raw) return '';
   var s = String(raw).trim();
   if (!s) return '';
-  if (/^https?:\/\//i.test(s) || /^data:image\//i.test(s)) return s;
+  if (/^data:image\//i.test(s)) return s;
 
-  // Drive share / open links → direct view URL
-  var drive = s.match(/\/(?:file\/d\/|open\?id=)([a-zA-Z0-9_-]{20,})/);
-  if (drive) return 'https://drive.google.com/uc?export=view&id=' + drive[1];
-
-  // Bare Drive file id
-  if (/^[a-zA-Z0-9_-]{25,}$/.test(s)) {
-    return 'https://drive.google.com/uc?export=view&id=' + s;
+  var driveId = extractDriveId_(s);
+  if (driveId) {
+    var hosted = publishDriveFile_(driveId, detail);
+    if (hosted) return hosted;
+    return publicDriveImageUrl_(driveId);
   }
+
+  if (/^https?:\/\//i.test(s)) return s;
   return '';
+}
+
+function publishDriveFile_(fileId, detail) {
+  var key = 'src:' + fileId;
+  var cached = cachedDriveUrl_(key);
+  if (cached) return cached;
+  try {
+    var file = DriveApp.getFileById(fileId);
+    try {
+      file.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW);
+    } catch (shareErr) {
+      // continue — copy may still work for the script owner
+    }
+    return hostImageBlob_(key, file.getBlob(), detail);
+  } catch (e) {
+    if (detail) detail.error = 'publish_drive:' + String(e);
+    return '';
+  }
+}
+
+function normalizeImageUrl_(raw) {
+  return resolveImageUrl_(raw, null);
 }
 
 /**
@@ -518,7 +566,7 @@ function cachedDriveUrl_(key) {
   if (!fileId) return '';
   try {
     DriveApp.getFileById(fileId);
-    return 'https://drive.google.com/uc?export=view&id=' + fileId;
+    return publicDriveImageUrl_(fileId);
   } catch (e) {
     props.deleteProperty('img:' + key);
     return '';
@@ -532,7 +580,7 @@ function putBlobOnDrive_(key, blob) {
   var file = folder.createFile(blob.setName(name));
   file.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW);
   props.setProperty('img:' + key, file.getId());
-  return 'https://drive.google.com/uc?export=view&id=' + file.getId();
+  return publicDriveImageUrl_(file.getId());
 }
 
 /** Webhook + editor helper: why photos are / aren't resolving. */
