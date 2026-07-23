@@ -45,14 +45,19 @@ Add a column headed **Image** (also accepts Photo / Img / Picture).
 2. **Insert → Image → Image in cell** (not “Image over cells”).
 3. Pick the file so it sits *inside* the cell.
 
-**Also works now:** floating **Image over cells** anchored on that row’s Image
-column, `=IMAGE("https://…")`, plain https links, and Drive links.
+After uploading, paste the latest `Code.gs`, deploy a **New version**, and
+**Review permissions** (Drive + Sheets) when Google prompts. Then tap
+**Refresh** in the app — it should briefly show `1 photo` (or `0 photos` /
+`No Image col` if something is still wrong).
 
-After uploading, tap **Refresh** in the app. Empty Image cells keep the wire
-placeholder.
+Phone photos are copied to a Drive folder (`QR Smart Cabinet Photos`) and the
+app loads that link. That avoids silent drops when images are larger than ~750KB.
 
-If the photo still doesn’t show after a **New version** deploy: delete the
-floating image and re-insert with **Image in cell**, then Refresh again.
+**Also works:** floating **Image over cells** on that row, `=IMAGE("https://…")`,
+plain https links, and Drive links pasted into the cell.
+
+**Debug in Apps Script:** Run `debugDrawerPhotos` (select function → Run) and
+check View → Logs for `source`, `http`, `bytes`, and `error` per drawer.
 
 **Session tracker**
 

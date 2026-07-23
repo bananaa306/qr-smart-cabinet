@@ -378,20 +378,25 @@ function SyncButton({
   reload: () => Promise<DrawerView[] | null>;
 }) {
   const [state, setState] = useState<"idle" | "syncing" | "ok" | "err">("idle");
+  const [hint, setHint] = useState("");
 
   async function syncNow() {
     setState("syncing");
+    setHint("");
     try {
       const sync = await api<{
         ok?: boolean;
         error?: string;
         count?: number;
         parts?: string[];
+        photos?: number;
+        imageCol?: number | null;
       }>("/api/sheets/sync", { method: "POST" });
 
       const next = await reload();
       if (!next) {
         setState("err");
+        setHint("Reload failed");
         setTimeout(() => setState("idle"), 2800);
         return;
       }
@@ -399,15 +404,22 @@ function SyncButton({
 
       if (!sync.data?.ok) {
         setState("err");
+        setHint(sync.data?.error || "Sync failed");
       } else {
         setState("ok");
+        const n = sync.data.photos ?? 0;
+        if (sync.data.imageCol == null) setHint("No Image col");
+        else if (n === 0) setHint("0 photos");
+        else setHint(`${n} photo${n === 1 ? "" : "s"}`);
       }
     } catch {
       setState("err");
+      setHint("Network error");
     }
     setTimeout(() => {
       setState("idle");
-    }, 3200);
+      setHint("");
+    }, 4200);
   }
 
   return (
@@ -443,7 +455,13 @@ function SyncButton({
           />
         </svg>
       </span>
-      <b>{state === "err" ? "Retry" : "Refresh"}</b>
+      <b>
+        {state === "err"
+          ? "Retry"
+          : state === "ok" && hint
+            ? hint
+            : "Refresh"}
+      </b>
     </button>
   );
 }

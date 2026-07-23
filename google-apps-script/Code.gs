@@ -45,6 +45,10 @@ function doPost(e) {
         photos: withPhoto,
       });
     }
+    // Diagnostics for Image column — no base64 in response.
+    if (body.type === 'photo_probe') {
+      return json_(probePhotos_(body.number));
+    }
     if (body.type === 'set_quantity') {
       return json_({
         ok: true,
@@ -164,51 +168,95 @@ function readInventory_() {
  *   - Insert → Image → Image in cell (CellImage)
  *   - Insert → Image → Image over cells (floating OverGridImage)
  *   - =IMAGE("url"), https links, Drive file ids
+ *
+ * Large / in-cell images are hosted on Drive (anyone-with-link) so inventory
+ * JSON stays small and phone photos are not silently dropped by size caps.
  */
 function readCellImageUrl_(sheet, sheetRow, imageCol) {
+  var detail = readCellImageDetail_(sheet, sheetRow, imageCol);
+  return detail.url || '';
+}
+
+function readCellImageDetail_(sheet, sheetRow, imageCol) {
+  var detail = {
+    url: '',
+    source: 'none',
+    valueType: '',
+    http: 0,
+    bytes: 0,
+    error: '',
+  };
   var range = sheet.getRange(sheetRow, imageCol);
+  var a1 = range.getA1Notation();
   var formula = String(range.getFormula() || '');
   if (formula) {
     var m = formula.match(/^=\s*IMAGE\s*\(\s*["']([^"']+)["']/i);
-    if (m && m[1]) return normalizeImageUrl_(m[1]);
+    if (m && m[1]) {
+      detail.url = normalizeImageUrl_(m[1]);
+      detail.source = detail.url ? 'formula' : 'none';
+      if (!detail.url) detail.error = 'bad_formula_url';
+      return detail;
+    }
   }
 
   var value = range.getValue();
+  detail.valueType = value === null || value === ''
+    ? 'empty'
+    : typeof value === 'string'
+      ? 'string'
+      : String(value);
+
   if (typeof value === 'string' && value.trim()) {
     var asUrl = normalizeImageUrl_(value.trim());
-    if (asUrl) return asUrl;
+    if (asUrl) {
+      detail.url = asUrl;
+      detail.source = 'url';
+      return detail;
+    }
   }
 
   // Insert → Image → Image in cell → CellImage object
-  // String(value) is "CellImage" in Apps Script.
   try {
     var isCellImage =
       value &&
       (typeof value.getContentUrl === 'function' || String(value) === 'CellImage');
     if (isCellImage && typeof value.getContentUrl === 'function') {
-      var fromCell = cellImageToDataUrl_(value);
-      if (fromCell) return fromCell;
+      var fromCell = cellImageToHostedUrl_(value, sheet.getSheetId() + '!' + a1, detail);
+      if (fromCell) {
+        detail.url = fromCell;
+        detail.source = 'cell';
+        return detail;
+      }
     }
   } catch (e) {
-    // fall through to overlay scan
+    detail.error = 'cell:' + String(e);
   }
 
-  // Floating images ("Image over cells") — common when Image in cell wasn't used.
-  var fromOverlay = findOverlayImageUrl_(sheet, sheetRow, imageCol);
-  if (fromOverlay) return fromOverlay;
+  // Floating images ("Image over cells") — same row, near Image column.
+  var fromOverlay = findOverlayImageUrl_(sheet, sheetRow, imageCol, detail);
+  if (fromOverlay) {
+    detail.url = fromOverlay;
+    detail.source = 'overlay';
+    return detail;
+  }
 
-  return '';
+  if (!detail.error) detail.error = 'no_image';
+  return detail;
 }
 
 /** Match a floating sheet image whose anchor sits on / near this Image cell. */
-function findOverlayImageUrl_(sheet, sheetRow, imageCol) {
+function findOverlayImageUrl_(sheet, sheetRow, imageCol, detail) {
   var images;
   try {
     images = sheet.getImages();
   } catch (e) {
+    if (detail) detail.error = 'overlay_list:' + String(e);
     return '';
   }
-  if (!images || !images.length) return '';
+  if (!images || !images.length) {
+    if (detail && !detail.error) detail.error = 'no_overlay';
+    return '';
+  }
 
   var best = null;
   var bestScore = 999;
@@ -223,18 +271,37 @@ function findOverlayImageUrl_(sheet, sheetRow, imageCol) {
     if (!anchor) continue;
     var r = anchor.getRow();
     var c = anchor.getColumn();
-    // Prefer exact Image-cell anchors; allow 1-col drift (common with float placement).
+    // Prefer Image-cell anchors; allow drift (float placement is imprecise).
     var rowDist = Math.abs(r - sheetRow);
     var colDist = Math.abs(c - imageCol);
-    if (rowDist > 1 || colDist > 1) continue;
+    if (rowDist > 0 || colDist > 3) continue;
     var score = rowDist * 10 + colDist;
     if (score < bestScore) {
       bestScore = score;
       best = img;
     }
   }
-  if (!best) return '';
-  return overGridImageToDataUrl_(best);
+  // Fallback: any floating image on this row.
+  if (!best) {
+    for (var j = 0; j < images.length; j++) {
+      var img2 = images[j];
+      var anchor2;
+      try {
+        anchor2 = img2.getAnchorCell();
+      } catch (e3) {
+        continue;
+      }
+      if (anchor2 && anchor2.getRow() === sheetRow) {
+        best = img2;
+        break;
+      }
+    }
+  }
+  if (!best) {
+    if (detail && !detail.error) detail.error = 'overlay_miss_row_' + sheetRow;
+    return '';
+  }
+  return overGridImageToHostedUrl_(best, sheet.getSheetId() + '!r' + sheetRow, detail);
 }
 
 function normalizeImageUrl_(raw) {
@@ -255,18 +322,63 @@ function normalizeImageUrl_(raw) {
 }
 
 /**
- * Turn a CellImage into a data URL.
+ * CellImage → Drive-hosted view URL (or small data URL).
  * Content URLs require the script's OAuth token — plain UrlFetch gets 403.
  */
-function cellImageToDataUrl_(cellImage) {
+function cellImageToHostedUrl_(cellImage, cacheKey, detail) {
   var contentUrl = '';
   try {
     contentUrl = cellImage.getContentUrl();
   } catch (e) {
+    if (detail) detail.error = 'getContentUrl:' + String(e);
     return '';
   }
-  if (!contentUrl) return '';
+  if (!contentUrl) {
+    if (detail) detail.error = 'empty_content_url';
+    return '';
+  }
 
+  var fingerprint = Utilities.base64EncodeWebSafe(
+    Utilities.computeDigest(Utilities.DigestAlgorithm.MD5, contentUrl)
+  ).substring(0, 10);
+  var key = cacheKey + ':' + fingerprint;
+
+  var cached = cachedDriveUrl_(key);
+  if (cached) return cached;
+
+  var blob = fetchImageBlob_(contentUrl, detail);
+  if (!blob) return '';
+  return hostImageBlob_(key, blob, detail);
+}
+
+/** Floating OverGridImage → hosted URL via getBlob(). */
+function overGridImageToHostedUrl_(img, cacheKey, detail) {
+  try {
+    if (typeof img.getUrl === 'function') {
+      var linked = img.getUrl();
+      if (linked) {
+        var n = normalizeImageUrl_(linked);
+        if (n) return n;
+      }
+    }
+  } catch (e) {
+    // continue to blob
+  }
+  try {
+    var blob = img.getBlob();
+    if (!blob) return '';
+    var bytes = blob.getBytes() || [];
+    var fingerprint = Utilities.base64EncodeWebSafe(
+      Utilities.computeDigest(Utilities.DigestAlgorithm.MD5, bytes)
+    ).substring(0, 10);
+    return hostImageBlob_(cacheKey + ':' + fingerprint, blob, detail);
+  } catch (e2) {
+    if (detail) detail.error = 'overlay_blob:' + String(e2);
+    return '';
+  }
+}
+
+function fetchImageBlob_(contentUrl, detail) {
   var resp = UrlFetchApp.fetch(contentUrl, {
     muteHttpExceptions: true,
     followRedirects: true,
@@ -275,44 +387,167 @@ function cellImageToDataUrl_(cellImage) {
     },
   });
   if (resp.getResponseCode() < 200 || resp.getResponseCode() >= 300) {
-    // Retry without auth header (some content URLs are briefly public).
     resp = UrlFetchApp.fetch(contentUrl, {
       muteHttpExceptions: true,
       followRedirects: true,
     });
   }
+  if (detail) detail.http = resp.getResponseCode();
   if (resp.getResponseCode() < 200 || resp.getResponseCode() >= 300) {
-    return '';
+    if (detail) detail.error = 'fetch_http_' + resp.getResponseCode();
+    return null;
   }
-
-  return blobToDataUrl_(resp.getBlob());
+  var blob = resp.getBlob();
+  if (detail) detail.bytes = (blob.getBytes() || []).length;
+  return blob;
 }
 
-/** Floating OverGridImage → data URL via getBlob() (no UrlFetch needed). */
-function overGridImageToDataUrl_(img) {
-  try {
-    if (typeof img.getUrl === 'function') {
-      var linked = img.getUrl();
-      if (linked) return normalizeImageUrl_(linked);
-    }
-  } catch (e) {
-    // continue to blob
-  }
-  try {
-    return blobToDataUrl_(img.getBlob());
-  } catch (e2) {
-    return '';
-  }
-}
-
-function blobToDataUrl_(blob) {
+/**
+ * Prefer a stable Drive link so inventory JSON stays tiny.
+ * Tiny images (<120KB) can stay as data URLs if Drive write fails.
+ */
+function hostImageBlob_(key, blob, detail) {
   if (!blob) return '';
-  var bytes = blob.getBytes();
-  // Cap payload so inventory JSON stays reasonable for nine drawers.
-  if (!bytes || bytes.length === 0 || bytes.length > 750000) return '';
-  var contentType = blob.getContentType() || 'image/png';
-  if (contentType.indexOf('image/') !== 0) contentType = 'image/png';
-  return 'data:' + contentType + ';base64,' + Utilities.base64Encode(bytes);
+  var bytes = blob.getBytes() || [];
+  if (detail) detail.bytes = bytes.length;
+  if (!bytes.length) {
+    if (detail) detail.error = 'empty_blob';
+    return '';
+  }
+
+  fixBlobMime_(blob, bytes);
+
+  try {
+    var url = putBlobOnDrive_(key, blob);
+    if (url) return url;
+  } catch (e) {
+    if (detail) detail.error = 'drive:' + String(e);
+  }
+
+  // Fallback: inline only small images (phone photos are usually larger).
+  if (bytes.length <= 120000) {
+    var contentType = blob.getContentType() || 'image/jpeg';
+    if (contentType.indexOf('image/') !== 0) contentType = 'image/jpeg';
+    return 'data:' + contentType + ';base64,' + Utilities.base64Encode(bytes);
+  }
+
+  if (detail && !detail.error) {
+    detail.error = 'too_large_no_drive_' + bytes.length;
+  }
+  return '';
+}
+
+function fixBlobMime_(blob, bytes) {
+  var type = blob.getContentType() || '';
+  if (type.indexOf('image/') === 0) return;
+  // Signed byte sniff (Apps Script bytes are -128..127).
+  if (bytes.length >= 3 && bytes[0] === -1 && bytes[1] === -40) {
+    blob.setContentType('image/jpeg');
+  } else if (
+    bytes.length >= 8 &&
+    bytes[0] === -119 &&
+    bytes[1] === 80 &&
+    bytes[2] === 78 &&
+    bytes[3] === 71
+  ) {
+    blob.setContentType('image/png');
+  } else if (
+    bytes.length >= 6 &&
+    bytes[0] === 71 &&
+    bytes[1] === 73 &&
+    bytes[2] === 70
+  ) {
+    blob.setContentType('image/gif');
+  } else if (
+    bytes.length >= 12 &&
+    bytes[0] === 82 &&
+    bytes[1] === 73 &&
+    bytes[2] === 70 &&
+    bytes[3] === 70
+  ) {
+    blob.setContentType('image/webp');
+  } else {
+    blob.setContentType('image/jpeg');
+  }
+}
+
+function photoFolder_() {
+  var props = PropertiesService.getScriptProperties();
+  var id = props.getProperty('PHOTO_FOLDER_ID');
+  if (id) {
+    try {
+      return DriveApp.getFolderById(id);
+    } catch (e) {
+      // recreate below
+    }
+  }
+  var folder = DriveApp.createFolder('QR Smart Cabinet Photos');
+  props.setProperty('PHOTO_FOLDER_ID', folder.getId());
+  return folder;
+}
+
+function cachedDriveUrl_(key) {
+  var props = PropertiesService.getScriptProperties();
+  var fileId = props.getProperty('img:' + key);
+  if (!fileId) return '';
+  try {
+    DriveApp.getFileById(fileId);
+    return 'https://drive.google.com/uc?export=view&id=' + fileId;
+  } catch (e) {
+    props.deleteProperty('img:' + key);
+    return '';
+  }
+}
+
+function putBlobOnDrive_(key, blob) {
+  var props = PropertiesService.getScriptProperties();
+  var folder = photoFolder_();
+  var name = 'drawer-' + key.replace(/[^a-zA-Z0-9._-]+/g, '_').substring(0, 80);
+  var file = folder.createFile(blob.setName(name));
+  file.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW);
+  props.setProperty('img:' + key, file.getId());
+  return 'https://drive.google.com/uc?export=view&id=' + file.getId();
+}
+
+/** Webhook + editor helper: why photos are / aren't resolving. */
+function probePhotos_(number) {
+  var t = locateTable_();
+  if (!t) return { ok: false, error: 'no_table' };
+  if (!t.col.image) {
+    return {
+      ok: false,
+      error: 'no_image_column',
+      headers: t.sheet.getRange(1, 1, 1, t.width).getValues()[0],
+    };
+  }
+  var out = [];
+  for (var i = 0; i < t.rows.length; i++) {
+    var row = t.rows[i];
+    var n = t.col.drawer ? parseDrawerNumber_(row[t.col.drawer - 1]) : i + 1;
+    if (!n) continue;
+    if (number != null && Number(number) && n !== Number(number)) continue;
+    var sheetRow = t.headerRow + 1 + i;
+    var detail = readCellImageDetail_(t.sheet, sheetRow, t.col.image);
+    out.push({
+      number: n,
+      row: sheetRow,
+      imageCol: t.col.image,
+      source: detail.source,
+      valueType: detail.valueType,
+      http: detail.http,
+      bytes: detail.bytes,
+      hasUrl: Boolean(detail.url),
+      urlPrefix: detail.url ? String(detail.url).substring(0, 48) : '',
+      error: detail.error,
+    });
+  }
+  return { ok: true, imageCol: t.col.image, drawers: out };
+}
+
+/** Run from Apps Script editor (Run → debugDrawerPhotos) to inspect Image cells. */
+function debugDrawerPhotos() {
+  var result = probePhotos_(null);
+  Logger.log(JSON.stringify(result, null, 2));
 }
 
 /** Write only Quantity for one drawer. Never touches Part or Is Locked. */
@@ -396,7 +631,7 @@ function locateTable_() {
       else if (h === 'part' || h === 'item' || h === 'parts' || h === 'item name') col.part = c + 1;
       else if (h === 'quantity' || h === 'qty' || h === 'stock' || h === 'count') col.quantity = c + 1;
       else if (h === 'is locked' || h === 'locked' || h === 'locked?') col.locked = c + 1;
-      else if (h === 'image' || h === 'photo' || h === 'img' || h === 'picture') col.image = c + 1;
+      else if (h === 'image' || h === 'images' || h === 'photo' || h === 'photos' || h === 'img' || h === 'picture') col.image = c + 1;
       else if (h === 'session id' || h === 'sessionid') col.sessionId = c + 1;
     }
     // Must be inventory (Part + Quantity), not the session tracker tab.

@@ -202,7 +202,13 @@ export async function logSessionRow(
 async function pullOnce(opts?: {
   force?: boolean;
   timeoutMs?: number;
-}): Promise<{ ok: boolean; error?: string; count?: number }> {
+}): Promise<{
+  ok: boolean;
+  error?: string;
+  count?: number;
+  photos?: number;
+  imageCol?: number | null;
+}> {
   const res = await postToSheets(
     { secret: SECRET, type: "inventory" },
     { timeoutMs: opts?.timeoutMs },
@@ -222,12 +228,20 @@ async function pullOnce(opts?: {
     return { ok: false, error: "read_body_failed" };
   }
 
-  let body: { drawers?: SheetDrawerRow[]; error?: string; ok?: boolean };
+  let body: {
+    drawers?: SheetDrawerRow[];
+    error?: string;
+    ok?: boolean;
+    photos?: number;
+    imageCol?: number | null;
+  };
   try {
     body = parseSheetsJson(text) as {
       drawers?: SheetDrawerRow[];
       error?: string;
       ok?: boolean;
+      photos?: number;
+      imageCol?: number | null;
     };
   } catch {
     audit({
@@ -254,8 +268,20 @@ async function pullOnce(opts?: {
   applySheetRowsToStore(rows);
   lastPullAt = Date.now();
   lastPullOk = true;
-  audit({ type: "sheets.pull_ok", detail: `${rows.length} drawers` });
-  return { ok: true, count: rows.length };
+  const photoCount =
+    typeof body.photos === "number"
+      ? body.photos
+      : rows.filter((r) => String(r.photo ?? r.image ?? "").trim()).length;
+  audit({
+    type: "sheets.pull_ok",
+    detail: `${rows.length} drawers photos_${photoCount} imageCol_${body.imageCol ?? "none"}`,
+  });
+  return {
+    ok: true,
+    count: rows.length,
+    photos: photoCount,
+    imageCol: body.imageCol ?? null,
+  };
 }
 
 /**
@@ -265,7 +291,13 @@ async function pullOnce(opts?: {
 export async function pullStockFromSheets(opts?: {
   force?: boolean;
   timeoutMs?: number;
-}): Promise<{ ok: boolean; error?: string; count?: number }> {
+}): Promise<{
+  ok: boolean;
+  error?: string;
+  count?: number;
+  photos?: number;
+  imageCol?: number | null;
+}> {
   if (!sheetsEnabled()) return { ok: false, error: "not_configured" };
   seed();
 
@@ -533,6 +565,7 @@ export async function syncSheet(): Promise<{
   count?: number;
   parts?: string[];
   photos?: number;
+  imageCol?: number | null;
 }> {
   if (!sheetsEnabled()) return { ok: false, error: "not_configured" };
   const result = await pullStockFromSheets({ force: true, timeoutMs: 45000 });
@@ -550,7 +583,14 @@ export async function syncSheet(): Promise<{
     return Boolean(item?.photo?.trim());
   }).length;
 
-  return { ok: true, count: result.count ?? parts.length, parts, photos };
+  return {
+    ok: true,
+    count: result.count ?? parts.length,
+    parts,
+    photos: result.photos ?? photos,
+    imageCol: result.imageCol ?? null,
+  };
+}
 }
 
 export function sheetsEnabled(): boolean {
