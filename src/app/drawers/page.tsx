@@ -671,7 +671,6 @@ function DrawerDetail({
   const [working, setWorking] = useState(false);
   const [lockWorking, setLockWorking] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [photoPreview, setPhotoPreview] = useState<string | null>(null);
   const [slideX, setSlideX] = useState(0); // 0 = locked, 1 = open
   const [dragging, setDragging] = useState(false);
   const dragRef = useRef<{
@@ -692,7 +691,6 @@ function DrawerDetail({
     setWorking(false);
     setLockWorking(false);
     setError(null);
-    setPhotoPreview(null);
     setSlideX(drawer?.locked === false ? 1 : 0);
     idemKey.current = uuid();
     lockIdemKey.current = uuid();
@@ -864,13 +862,11 @@ function DrawerDetail({
     setError(messages[data.error ?? ""] ?? "Could not record that. Try again.");
   }
 
-  function handleDrop(files: FileList | null) {
-    const file = files?.[0];
-    if (!file || !file.type.startsWith("image/")) return;
-    setPhotoPreview(URL.createObjectURL(file));
-  }
-
   if (!drawer || index === null) return null;
+
+  const sheetPhoto = drawer.item.photo?.trim() || "";
+  const photoSrc = sheetPhoto || "/wire-placeholder.svg";
+  const photoAlt = sheetPhoto ? drawer.item.name : "Assorted wire placeholder";
 
   return (
     <div
@@ -905,35 +901,10 @@ function DrawerDetail({
         </div>
 
         <div className="smart-photo-pad">
-          <label
-            className="smart-photo-slot"
-            onDragOver={(event) => event.preventDefault()}
-            onDrop={(event) => {
-              event.preventDefault();
-              handleDrop(event.dataTransfer.files);
-            }}
-          >
+          <div className="smart-photo-slot" aria-hidden={!sheetPhoto}>
             {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img
-              src={
-                photoPreview ||
-                (drawer.item.photo?.trim() ? drawer.item.photo : "/wire-placeholder.svg")
-              }
-              alt={
-                photoPreview
-                  ? "Selected item preview"
-                  : drawer.item.photo?.trim()
-                    ? drawer.item.name
-                    : "Assorted wire placeholder"
-              }
-            />
-            <input
-              className="sr-only"
-              type="file"
-              accept="image/*"
-              onChange={(event) => handleDrop(event.target.files)}
-            />
-          </label>
+            <img src={photoSrc} alt={photoAlt} />
+          </div>
         </div>
 
         <section className="smart-detail-copy">

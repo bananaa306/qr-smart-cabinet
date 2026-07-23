@@ -1000,17 +1000,14 @@ body.smart-root {
   position: relative;
   display: flex;
   width: 100%;
-  height: 140px;
+  height: 168px;
   align-items: center;
   justify-content: center;
   overflow: hidden;
-  border: 1px dashed var(--smart-panel-border);
+  border: 1px solid var(--smart-panel-border);
   border-radius: 18px;
   background: var(--smart-panel-bg);
-  color: var(--smart-sub);
-  cursor: pointer;
-  font-size: 13px;
-  font-weight: 700;
+  pointer-events: none;
 }
 
 .smart-photo-slot img {
@@ -1019,7 +1016,6 @@ body.smart-root {
   width: 100%;
   height: 100%;
   object-fit: cover;
-  opacity: 0.78;
 }
 
 .smart-detail-copy {
