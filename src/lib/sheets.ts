@@ -591,7 +591,6 @@ export async function syncSheet(): Promise<{
     imageCol: result.imageCol ?? null,
   };
 }
-}
 
 export function sheetsEnabled(): boolean {
   return Boolean(WEBHOOK_URL && SECRET);
