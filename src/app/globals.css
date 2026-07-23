@@ -749,10 +749,11 @@ body.smart-root {
   display: flex;
   align-items: center;
   gap: 12px;
-  border: 1px solid var(--smart-panel-border);
+  border: 1px solid rgba(255, 248, 235, 0.12);
   border-radius: 16px;
-  background: var(--smart-panel-bg);
+  background: #2a2621;
   padding: 12px;
+  box-shadow: 0 1px 0 rgba(0, 0, 0, 0.35);
 }
 
 .smart-activity-badge {
@@ -765,12 +766,12 @@ body.smart-root {
 }
 
 .smart-activity-badge.take {
-  background: color-mix(in srgb, var(--smart-accent) 18%, transparent);
+  background: color-mix(in srgb, var(--smart-accent) 22%, #1d1a16);
   color: var(--smart-accent);
 }
 
 .smart-activity-badge.return {
-  background: rgba(74, 157, 106, 0.18);
+  background: rgba(74, 157, 106, 0.22);
   color: #6ecf8f;
 }
 
@@ -783,15 +784,16 @@ body.smart-root {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+  color: var(--smart-ink);
   font-size: 14px;
-  font-weight: 600;
+  font-weight: 650;
 }
 
 .smart-activity-row-main p:last-child {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  color: var(--smart-sub);
+  color: rgba(232, 224, 210, 0.72);
   font-size: 12px;
 }
 
@@ -826,9 +828,13 @@ body.smart-root {
   align-items: center;
   justify-content: center;
   gap: 12px;
+  margin-top: 12px;
+  border: 1px solid rgba(255, 248, 235, 0.12);
+  border-radius: 18px;
+  background: #2a2621;
   padding: 48px 24px;
   text-align: center;
-  color: var(--smart-sub);
+  color: rgba(232, 224, 210, 0.78);
   font-size: 14px;
 }
 
