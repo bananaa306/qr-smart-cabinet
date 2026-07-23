@@ -576,10 +576,22 @@ function debugDrawerPhotos() {
   Logger.log(JSON.stringify(result, null, 2));
 }
 
+/**
+ * Fast permission grant — run this first from the editor.
+ * If Google asks, click Review permissions → Allow (Drive + external requests).
+ */
+function authorizeImageAccess() {
+  // Touch each scope the Image column needs.
+  UrlFetchApp.fetch('https://www.google.com', { muteHttpExceptions: true });
+  var folder = photoFolder_();
+  Logger.log('Authorized. Photo folder: ' + folder.getName() + ' (' + folder.getId() + ')');
+}
+
 /** Menu: convert Image-column cell/floating images into =IMAGE(url) for the app. */
 function onOpen() {
   SpreadsheetApp.getUi()
     .createMenu('QR Cabinet')
+    .addItem('Authorize image access', 'authorizeImageAccess')
     .addItem('Connect images to app', 'publishImagesToApp')
     .addItem('Debug drawer photos', 'debugDrawerPhotos')
     .addToUi();
@@ -588,13 +600,14 @@ function onOpen() {
 /**
  * One-shot: host every Image-column picture on Drive and write =IMAGE("url")
  * into that cell so the web app can read it on Refresh.
+ *
+ * Tip: if the execution log spins forever, check the spreadsheet tab — alerts
+ * open there, not in the script editor. Prefer Logger output below.
  */
 function publishImagesToApp() {
   var t = locateTable_();
   if (!t || !t.col.image) {
-    SpreadsheetApp.getUi().alert(
-      'Add an Image column header (Image / Photo / Img) on the inventory sheet first.'
-    );
+    Logger.log('Add an Image column header (Image / Photo / Img) first.');
     return;
   }
   var linked = 0;
@@ -604,14 +617,20 @@ function publishImagesToApp() {
     var n = t.col.drawer ? parseDrawerNumber_(row[t.col.drawer - 1]) : i + 1;
     if (!n) continue;
     var sheetRow = t.headerRow + 1 + i;
+    Logger.log('Drawer ' + n + '…');
     var detail = readCellImageDetail_(t.sheet, sheetRow, t.col.image);
-    if (detail.url) linked++;
-    else failed++;
+    if (detail.url) {
+      linked++;
+      Logger.log('  ok source=' + detail.source + ' bytes=' + detail.bytes);
+    } else {
+      failed++;
+      Logger.log('  fail valueType=' + detail.valueType + ' error=' + detail.error);
+    }
   }
-  SpreadsheetApp.getUi().alert(
-    'Connected ' + linked + ' image(s) to the app.' +
+  Logger.log(
+    'Done. Connected ' + linked + ' image(s).' +
       (failed ? ' ' + failed + ' row(s) had no readable image.' : '') +
-      '\n\nNow open the app and tap Refresh.'
+      ' Now open the app and tap Refresh.'
   );
 }
 
