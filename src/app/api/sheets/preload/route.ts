@@ -6,6 +6,7 @@ import { pullStockFromSheets, sheetsCacheFresh, sheetsEnabled } from "@/lib/shee
 /**
  * GET /api/sheets/preload — start warming inventory while the user is on sign-in.
  * Rate-limited; safe to call from the public check-in screen.
+ * Always returns immediately — pull runs in after().
  */
 export async function GET(req: Request) {
   if (!sheetsEnabled()) {
@@ -21,13 +22,9 @@ export async function GET(req: Request) {
     return NextResponse.json({ ok: true, fresh: true });
   }
 
-  // Try a quick pull while sign-in is on screen; finish in the background if cold.
-  const quick = await pullStockFromSheets({ timeoutMs: 2500 });
-  if (!quick.ok) {
-    after(() => {
-      void pullStockFromSheets({ force: true, timeoutMs: 20000 });
-    });
-  }
+  after(() => {
+    void pullStockFromSheets({ force: true, timeoutMs: 20000 });
+  });
 
-  return NextResponse.json({ ok: true, fresh: quick.ok });
+  return NextResponse.json({ ok: true, fresh: false, warming: true });
 }

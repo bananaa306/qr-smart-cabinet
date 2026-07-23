@@ -15,9 +15,10 @@ export async function GET() {
   const user = await currentUser();
   if (!user) return NextResponse.json({ error: "unauthenticated" }, { status: 401 });
 
-  // Cache hit returns instantly; cold starts get a short wait (preload usually warmed this).
-  const quick = await pullStockFromSheets({ timeoutMs: sheetsCacheFresh() ? 500 : 2500 });
-  if (!quick.ok && sheetsEnabled()) {
+  // Never block the menu on Apps Script. Return in-memory stock immediately and
+  // refresh from the sheet in the background.
+  const fresh = sheetsCacheFresh();
+  if (sheetsEnabled() && !fresh) {
     after(() => {
       void pullStockFromSheets({ force: true, timeoutMs: 20000 });
     });
@@ -31,6 +32,6 @@ export async function GET() {
   return NextResponse.json({
     drawers,
     sheets: sheetsEnabled(),
-    sheetsFresh: quick.ok,
+    sheetsFresh: fresh,
   });
 }

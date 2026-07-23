@@ -95,9 +95,11 @@ export async function POST(
     return NextResponse.json({ error: "drawer_disabled" }, { status: 409 });
   }
 
-  // Prefer sheet stock when cache is stale — never stall take/return on a cold script.
+  // Don't stall take/return on a cold script — mutate local SoT, mirror in after().
   if (sheetsEnabled() && !sheetsCacheFresh()) {
-    await pullStockFromSheets({ timeoutMs: 600 });
+    after(() => {
+      void pullStockFromSheets({ timeoutMs: 15000 });
+    });
   }
 
   const stock = db.stock.get(drawer.id)!;

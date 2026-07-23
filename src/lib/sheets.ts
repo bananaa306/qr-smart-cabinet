@@ -202,6 +202,7 @@ export async function logSessionRow(
 async function pullOnce(opts?: {
   force?: boolean;
   timeoutMs?: number;
+  includePhotos?: boolean;
 }): Promise<{
   ok: boolean;
   error?: string;
@@ -210,7 +211,11 @@ async function pullOnce(opts?: {
   imageCol?: number | null;
 }> {
   const res = await postToSheets(
-    { secret: SECRET, type: "inventory" },
+    {
+      secret: SECRET,
+      type: "inventory",
+      includePhotos: Boolean(opts?.includePhotos),
+    },
     { timeoutMs: opts?.timeoutMs },
   );
   if (!res) {
@@ -302,6 +307,7 @@ async function pullOnce(opts?: {
 export async function pullStockFromSheets(opts?: {
   force?: boolean;
   timeoutMs?: number;
+  includePhotos?: boolean;
 }): Promise<{
   ok: boolean;
   error?: string;
@@ -579,7 +585,11 @@ export async function syncSheet(): Promise<{
   imageCol?: number | null;
 }> {
   if (!sheetsEnabled()) return { ok: false, error: "not_configured" };
-  const result = await pullStockFromSheets({ force: true, timeoutMs: 45000 });
+  const result = await pullStockFromSheets({
+    force: true,
+    timeoutMs: 45000,
+    includePhotos: true,
+  });
   if (!result.ok) return { ok: false, error: result.error ?? "pull_failed" };
 
   const parts = [...db.drawers.values()]

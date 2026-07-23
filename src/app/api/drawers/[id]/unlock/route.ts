@@ -78,8 +78,11 @@ export async function POST(
     return NextResponse.json({ error: "drawer_disabled" }, { status: 409 });
   }
 
+  // Don't block unlock on Sheets — stock/authz use in-memory SoT.
   if (sheetsEnabled() && !sheetsCacheFresh()) {
-    await pullStockFromSheets({ timeoutMs: 400 });
+    after(() => {
+      void pullStockFromSheets({ timeoutMs: 15000 });
+    });
   }
 
   if (db.openDrawer.has(drawer.id)) {

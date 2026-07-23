@@ -36,7 +36,9 @@ export async function POST(
   }
 
   if (sheetsEnabled() && !sheetsCacheFresh()) {
-    await pullStockFromSheets({ timeoutMs: 400 });
+    after(() => {
+      void pullStockFromSheets({ timeoutMs: 15000 });
+    });
   }
 
   const stock = db.stock.get(drawer.id)!;

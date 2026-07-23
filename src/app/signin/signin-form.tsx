@@ -47,7 +47,8 @@ export function SignInForm() {
     void (async () => {
       const { ok, data } = await api<{ user: { name: string } | null }>("/api/auth/me");
       if (cancelled || !ok || !data.user) return;
-      await prefetchDrawers(1500);
+      // Navigate immediately; drawers page + preload warm the sheet.
+      void prefetchDrawers(800);
       if (!cancelled) router.replace(safeNextPath(searchParams.get("next")));
     })();
     return () => {
@@ -71,7 +72,7 @@ export function SignInForm() {
     });
 
     if (ok) {
-      await prefetchDrawers();
+      void prefetchDrawers(500);
       router.replace(safeNextPath(searchParams.get("next")));
       return;
     }

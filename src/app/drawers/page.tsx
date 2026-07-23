@@ -27,7 +27,7 @@ function toDisplayPhotoUrl(raw: string): string {
     s.match(/\/file\/d\/([a-zA-Z0-9_-]{20,})/)?.[1] ||
     s.match(/\/d\/([a-zA-Z0-9_-]{20,})(?:\/|$)/)?.[1];
   if (id && /drive\.google\.com|googleusercontent\.com/i.test(s)) {
-    return `https://drive.google.com/thumbnail?id=${id}&sz=w1600`;
+    return `https://drive.google.com/thumbnail?id=${id}&sz=w800`;
   }
   return s;
 }
@@ -149,7 +149,7 @@ function DrawersPageInner() {
   /** Keep optimistic lock UI until sheet / other isolates catch up. */
   const lockHold = useRef<Map<string, { locked: boolean; until: number }>>(new Map());
 
-  const DETAIL_REVEAL_DELAY_MS = 320;
+  const DETAIL_REVEAL_DELAY_MS = 80;
 
   function applyLockHold(list: DrawerView[]): DrawerView[] {
     const now = Date.now();
@@ -199,29 +199,24 @@ function DrawersPageInner() {
   useEffect(() => {
     let cancelled = false;
     void (async () => {
-      const POLL_MS = 350;
-      const MAX_POLLS = 18;
+      // Paint immediately from whatever the server has; soft-refresh while sheet warms.
+      const first = await fetchCabinet();
+      if (cancelled || !first) return;
+      setDrawers(applyLockHold(first.drawers));
+      setSheets(first.sheets);
+      setLoadingHint("Loading cabinet…");
 
-      for (let i = 0; i < MAX_POLLS; i++) {
-        if (i > 0) await new Promise((r) => setTimeout(r, POLL_MS));
+      if (!first.sheets || first.sheetsFresh) return;
+
+      for (let i = 0; i < 8; i++) {
+        await new Promise((r) => setTimeout(r, 700));
         if (cancelled) return;
-
-        const result = await fetchCabinet();
-        if (!result) return;
-
-        // When the sheet is configured, wait for a real pull — not demo seed names.
-        if (result.sheets && !result.sheetsFresh) {
-          setLoadingHint("Connecting to sheet…");
-          continue;
-        }
-
-        setDrawers(applyLockHold(result.drawers));
-        setSheets(result.sheets);
-        setLoadingHint("Loading cabinet…");
-        return;
+        const next = await fetchCabinet();
+        if (!next) return;
+        setDrawers(applyLockHold(next.drawers));
+        setSheets(next.sheets);
+        if (next.sheetsFresh) return;
       }
-
-      if (!cancelled) await loadCabinet();
     })();
     api<{ user: { name: string } | null }>("/api/auth/me").then(({ ok, data }) => {
       if (ok && data.user?.name) setSessionName(data.user.name);
@@ -295,9 +290,7 @@ function DrawersPageInner() {
       setDetailIdx(null);
       setOpenIdx(null);
       setDetailPhase("idle");
-      // Keep the cabinet menu aligned with the sheet after closing a drawer.
-      void loadCabinet();
-    }, 220);
+    }, 180);
   }
 
   function updateDrawer(next: DrawerView) {
@@ -345,7 +338,7 @@ function DrawersPageInner() {
               drawers={drawers}
               accent={accent}
               openIdx={openIdx}
-              stagger={90}
+              stagger={40}
               rulerBg={rulerBg}
               dotBg={dotBg}
               line={t.line}
@@ -405,16 +398,21 @@ function SyncButton({
         parts?: string[];
         photos?: number;
         imageCol?: number | null;
+        drawers?: DrawerView[];
       }>("/api/sheets/sync", { method: "POST" });
 
-      const next = await reload();
-      if (!next) {
-        setState("err");
-        setHint("Reload failed");
-        setTimeout(() => setState("idle"), 2800);
-        return;
+      if (Array.isArray(sync.data?.drawers) && sync.data.drawers.length) {
+        onRefreshed(sync.data.drawers);
+      } else {
+        const next = await reload();
+        if (!next) {
+          setState("err");
+          setHint("Reload failed");
+          setTimeout(() => setState("idle"), 2800);
+          return;
+        }
+        onRefreshed(next);
       }
-      onRefreshed(next);
 
       if (!sync.data?.ok) {
         setState("err");
@@ -926,7 +924,13 @@ function DrawerDetail({
         <div className="smart-photo-pad">
           <div className="smart-photo-slot" aria-hidden={!sheetPhoto}>
             {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img src={photoSrc} alt={photoAlt} referrerPolicy="no-referrer" />
+            <img
+              src={photoSrc}
+              alt={photoAlt}
+              referrerPolicy="no-referrer"
+              loading="lazy"
+              decoding="async"
+            />
           </div>
         </div>
 

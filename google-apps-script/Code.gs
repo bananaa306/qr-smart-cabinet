@@ -39,7 +39,9 @@ function doPost(e) {
     }
     if (body.type === 'inventory') {
       var table = locateTable_();
-      var drawers = readInventory_();
+      // Default: light pull (qty/part/locked + cheap IMAGE/URL only).
+      // includePhotos: true does Drive/CellImage work (Refresh / sync).
+      var drawers = readInventory_({ includeHeavyPhotos: !!body.includePhotos });
       var withPhoto = 0;
       for (var di = 0; di < drawers.length; di++) {
         if (drawers[di].photo) withPhoto++;
@@ -49,6 +51,7 @@ function doPost(e) {
         drawers: drawers,
         imageCol: table && table.col.image ? table.col.image : null,
         photos: withPhoto,
+        heavy: !!body.includePhotos,
       });
     }
     // Diagnostics for Image column — no base64 in response.
@@ -135,9 +138,10 @@ function parseQuantity_(value) {
   return isNaN(n) || n < 0 ? 0 : Math.floor(n);
 }
 
-function readInventory_() {
+function readInventory_(opts) {
   var t = locateTable_();
   if (!t) throw new Error('No sheet with a "Part" and "Quantity" header row found.');
+  var includeHeavyPhotos = !!(opts && opts.includeHeavyPhotos);
 
   var drawers = [];
   for (var i = 0; i < t.rows.length; i++) {
@@ -157,22 +161,57 @@ function readInventory_() {
     }
     var sheetRow = t.headerRow + 1 + i;
     var photo = '';
-    // Prefer an explicit Photo URL / Image URL text column when present.
+    var hasPhotoField = false;
     if (t.col.imageUrl) {
-      photo = normalizeImageUrl_(String(row[t.col.imageUrl - 1] || '').trim());
+      photo = readCheapImageUrl_(String(row[t.col.imageUrl - 1] || '').trim());
+      hasPhotoField = includeHeavyPhotos || Boolean(photo);
     }
     if (!photo && t.col.image) {
-      photo = readCellImageUrl_(t.sheet, sheetRow, t.col.image);
+      if (includeHeavyPhotos) {
+        photo = readCellImageUrl_(t.sheet, sheetRow, t.col.image);
+        hasPhotoField = true;
+      } else {
+        photo = readCellImageUrlLight_(t.sheet, sheetRow, t.col.image);
+        if (photo) hasPhotoField = true;
+      }
     }
-    drawers.push({
+    var entry = {
       number: number,
       part: part,
       quantity: quantity,
       locked: locked,
-      photo: photo,
-    });
+    };
+    // Omit photo on light pulls when unknown so the app keeps the last good URL.
+    if (hasPhotoField) entry.photo = photo;
+    drawers.push(entry);
   }
   return drawers;
+}
+
+/** Fast path: formula / plain URL only — no Drive publish or CellImage fetch. */
+function readCellImageUrlLight_(sheet, sheetRow, imageCol) {
+  var range = sheet.getRange(sheetRow, imageCol);
+  var formula = String(range.getFormula() || '');
+  if (formula) {
+    var m = formula.match(/^=\s*IMAGE\s*\(\s*["']([^"']+)["']/i);
+    if (m && m[1]) return readCheapImageUrl_(m[1]);
+  }
+  var value = range.getValue();
+  if (typeof value === 'string' && value.trim()) {
+    return readCheapImageUrl_(value.trim());
+  }
+  return '';
+}
+
+function readCheapImageUrl_(raw) {
+  if (!raw) return '';
+  var s = String(raw).trim();
+  if (!s) return '';
+  if (/^data:image\//i.test(s)) return s;
+  var driveId = extractDriveId_(s);
+  if (driveId) return publicDriveImageUrl_(driveId);
+  if (/^https?:\/\//i.test(s)) return s;
+  return '';
 }
 
 /**

@@ -1,6 +1,8 @@
 import { NextResponse } from "next/server";
-import { seed } from "@/lib/store";
+import { db, seed } from "@/lib/store";
+import { canAccessDrawer } from "@/lib/security";
 import { currentUser } from "@/lib/session";
+import { drawerView } from "@/lib/dto";
 import { sheetsEnabled, syncSheet } from "@/lib/sheets";
 
 // POST /api/sheets/sync — re-read inventory from Google Sheets (never overwrite).
@@ -16,5 +18,10 @@ export async function POST() {
   }
 
   const result = await syncSheet();
-  return NextResponse.json(result);
+  const drawers = [...db.drawers.values()]
+    .filter((d) => canAccessDrawer(user.id, d.id))
+    .map((d) => drawerView(d, db.stock.get(d.id)!))
+    .sort((a, b) => a.label.localeCompare(b.label, undefined, { numeric: true }));
+
+  return NextResponse.json({ ...result, drawers });
 }
