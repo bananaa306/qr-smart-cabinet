@@ -32,7 +32,18 @@ function doPost(e) {
       return json_({ ok: false, error: 'snapshot_disabled' });
     }
     if (body.type === 'inventory') {
-      return json_({ ok: true, drawers: readInventory_() });
+      var table = locateTable_();
+      var drawers = readInventory_();
+      var withPhoto = 0;
+      for (var di = 0; di < drawers.length; di++) {
+        if (drawers[di].photo) withPhoto++;
+      }
+      return json_({
+        ok: true,
+        drawers: drawers,
+        imageCol: table && table.col.image ? table.col.image : null,
+        photos: withPhoto,
+      });
     }
     if (body.type === 'set_quantity') {
       return json_({
@@ -154,7 +165,7 @@ function readInventory_() {
  *   - Insert → Image → Image over cells (floating OverGridImage)
  *   - =IMAGE("url"), https links, Drive file ids
  */
-function readCellImageUrl_(sheet, sheetRow, imageCol, drawerNumber) {
+function readCellImageUrl_(sheet, sheetRow, imageCol) {
   var range = sheet.getRange(sheetRow, imageCol);
   var formula = String(range.getFormula() || '');
   if (formula) {
@@ -164,12 +175,17 @@ function readCellImageUrl_(sheet, sheetRow, imageCol, drawerNumber) {
 
   var value = range.getValue();
   if (typeof value === 'string' && value.trim()) {
-    return normalizeImageUrl_(value.trim());
+    var asUrl = normalizeImageUrl_(value.trim());
+    if (asUrl) return asUrl;
   }
 
   // Insert → Image → Image in cell → CellImage object
+  // String(value) is "CellImage" in Apps Script.
   try {
-    if (value && typeof value.getContentUrl === 'function') {
+    var isCellImage =
+      value &&
+      (typeof value.getContentUrl === 'function' || String(value) === 'CellImage');
+    if (isCellImage && typeof value.getContentUrl === 'function') {
       var fromCell = cellImageToDataUrl_(value);
       if (fromCell) return fromCell;
     }
@@ -238,17 +254,35 @@ function normalizeImageUrl_(raw) {
   return '';
 }
 
-/** Turn a CellImage into a data URL (stable for the browser). */
+/**
+ * Turn a CellImage into a data URL.
+ * Content URLs require the script's OAuth token — plain UrlFetch gets 403.
+ */
 function cellImageToDataUrl_(cellImage) {
-  var contentUrl = cellImage.getContentUrl();
+  var contentUrl = '';
+  try {
+    contentUrl = cellImage.getContentUrl();
+  } catch (e) {
+    return '';
+  }
   if (!contentUrl) return '';
 
   var resp = UrlFetchApp.fetch(contentUrl, {
     muteHttpExceptions: true,
     followRedirects: true,
+    headers: {
+      Authorization: 'Bearer ' + ScriptApp.getOAuthToken(),
+    },
   });
   if (resp.getResponseCode() < 200 || resp.getResponseCode() >= 300) {
-    return contentUrl;
+    // Retry without auth header (some content URLs are briefly public).
+    resp = UrlFetchApp.fetch(contentUrl, {
+      muteHttpExceptions: true,
+      followRedirects: true,
+    });
+  }
+  if (resp.getResponseCode() < 200 || resp.getResponseCode() >= 300) {
+    return '';
   }
 
   return blobToDataUrl_(resp.getBlob());

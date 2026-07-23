@@ -532,9 +532,10 @@ export async function syncSheet(): Promise<{
   error?: string;
   count?: number;
   parts?: string[];
+  photos?: number;
 }> {
   if (!sheetsEnabled()) return { ok: false, error: "not_configured" };
-  const result = await pullStockFromSheets({ force: true, timeoutMs: 20000 });
+  const result = await pullStockFromSheets({ force: true, timeoutMs: 45000 });
   if (!result.ok) return { ok: false, error: result.error ?? "pull_failed" };
 
   const parts = [...db.drawers.values()]
@@ -544,7 +545,12 @@ export async function syncSheet(): Promise<{
       return `${d.label}: ${item?.name ?? "?"}`;
     });
 
-  return { ok: true, count: result.count ?? parts.length, parts };
+  const photos = [...db.drawers.values()].filter((d) => {
+    const item = db.items.get(d.itemId);
+    return Boolean(item?.photo?.trim());
+  }).length;
+
+  return { ok: true, count: result.count ?? parts.length, parts, photos };
 }
 
 export function sheetsEnabled(): boolean {
