@@ -6,6 +6,12 @@
  * (Execute as: Me · Who has access: Anyone). Put the /exec URL in
  * SHEETS_WEBHOOK_URL and the same secret in SHEETS_SECRET on the app side.
  *
+ * Image column needs ONE authorization pass (UrlFetch + Drive):
+ *   1. Also paste appsscript.json (Project Settings → Show "appsscript.json").
+ *   2. In the editor, select publishImagesToApp → Run → Review permissions → Allow.
+ *   3. Deploy → Manage deployments → Edit → New version → Deploy.
+ *   4. In the app, tap Refresh — drawer photos come from the Image column.
+ *
  * Inventory sheet (one row per drawer) — owned in Sheets:
  *     Drawer | Part | Quantity | Is Locked | Image
  *
