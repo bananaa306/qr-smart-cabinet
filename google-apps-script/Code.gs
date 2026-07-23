@@ -150,7 +150,14 @@ function readInventory_() {
       }
     }
     var sheetRow = t.headerRow + 1 + i;
-    var photo = t.col.image ? readCellImageUrl_(t.sheet, sheetRow, t.col.image) : '';
+    var photo = '';
+    // Prefer an explicit Photo URL / Image URL text column when present.
+    if (t.col.imageUrl) {
+      photo = normalizeImageUrl_(String(row[t.col.imageUrl - 1] || '').trim());
+    }
+    if (!photo && t.col.image) {
+      photo = readCellImageUrl_(t.sheet, sheetRow, t.col.image);
+    }
     drawers.push({
       number: number,
       part: part,
@@ -225,6 +232,7 @@ function readCellImageDetail_(sheet, sheetRow, imageCol) {
       if (fromCell) {
         detail.url = fromCell;
         detail.source = 'cell';
+        persistImageFormula_(range, fromCell);
         return detail;
       }
     }
@@ -237,11 +245,23 @@ function readCellImageDetail_(sheet, sheetRow, imageCol) {
   if (fromOverlay) {
     detail.url = fromOverlay;
     detail.source = 'overlay';
+    persistImageFormula_(range, fromOverlay);
     return detail;
   }
 
   if (!detail.error) detail.error = 'no_image';
   return detail;
+}
+
+/** Keep the sheet visual, give the app a stable URL on later pulls. */
+function persistImageFormula_(range, url) {
+  if (!range || !url || url.indexOf('http') !== 0) return;
+  try {
+    var safe = String(url).replace(/"/g, '');
+    range.setFormula('=IMAGE("' + safe + '")');
+  } catch (e) {
+    // Non-fatal — inventory can still return the URL this request.
+  }
 }
 
 /** Match a floating sheet image whose anchor sits on / near this Image cell. */
@@ -550,6 +570,45 @@ function debugDrawerPhotos() {
   Logger.log(JSON.stringify(result, null, 2));
 }
 
+/** Menu: convert Image-column cell/floating images into =IMAGE(url) for the app. */
+function onOpen() {
+  SpreadsheetApp.getUi()
+    .createMenu('QR Cabinet')
+    .addItem('Connect images to app', 'publishImagesToApp')
+    .addItem('Debug drawer photos', 'debugDrawerPhotos')
+    .addToUi();
+}
+
+/**
+ * One-shot: host every Image-column picture on Drive and write =IMAGE("url")
+ * into that cell so the web app can read it on Refresh.
+ */
+function publishImagesToApp() {
+  var t = locateTable_();
+  if (!t || !t.col.image) {
+    SpreadsheetApp.getUi().alert(
+      'Add an Image column header (Image / Photo / Img) on the inventory sheet first.'
+    );
+    return;
+  }
+  var linked = 0;
+  var failed = 0;
+  for (var i = 0; i < t.rows.length; i++) {
+    var row = t.rows[i];
+    var n = t.col.drawer ? parseDrawerNumber_(row[t.col.drawer - 1]) : i + 1;
+    if (!n) continue;
+    var sheetRow = t.headerRow + 1 + i;
+    var detail = readCellImageDetail_(t.sheet, sheetRow, t.col.image);
+    if (detail.url) linked++;
+    else failed++;
+  }
+  SpreadsheetApp.getUi().alert(
+    'Connected ' + linked + ' image(s) to the app.' +
+      (failed ? ' ' + failed + ' row(s) had no readable image.' : '') +
+      '\n\nNow open the app and tap Refresh.'
+  );
+}
+
 /** Write only Quantity for one drawer. Never touches Part or Is Locked. */
 function setQuantity_(number, quantity) {
   var t = locateTable_();
@@ -632,6 +691,7 @@ function locateTable_() {
       else if (h === 'quantity' || h === 'qty' || h === 'stock' || h === 'count') col.quantity = c + 1;
       else if (h === 'is locked' || h === 'locked' || h === 'locked?') col.locked = c + 1;
       else if (h === 'image' || h === 'images' || h === 'photo' || h === 'photos' || h === 'img' || h === 'picture') col.image = c + 1;
+      else if (h === 'photo url' || h === 'image url' || h === 'image link' || h === 'img url' || h === 'picture url') col.imageUrl = c + 1;
       else if (h === 'session id' || h === 'sessionid') col.sessionId = c + 1;
     }
     // Must be inventory (Part + Quantity), not the session tracker tab.

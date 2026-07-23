@@ -36,28 +36,26 @@ rows are append-only (separate sheet).
 
 Drawer numbers must match app labels (`Drawer 1` → `1`).
 
-### Image column (example 2)
+### Image column (feeds the drawer photo)
 
 Add a column headed **Image** (also accepts Photo / Img / Picture).
 
-**Preferred (Image in cell):**
+The app reads that column on every Refresh. Preferred setup:
+
 1. Select the Image cell for that drawer.
-2. **Insert → Image → Image in cell** (not “Image over cells”).
-3. Pick the file so it sits *inside* the cell.
+2. **Insert → Image → Image in cell**.
+3. In the sheet: **QR Cabinet → Connect images to app**  
+   (or just tap **Refresh** in the app — first sync converts the cell to
+   `=IMAGE("…")` and hosts the file in Drive).
+4. When Google asks, allow **Drive** access.
+5. Tap **Refresh** again in the app — it should briefly show `1 photo`.
 
-After uploading, paste the latest `Code.gs`, deploy a **New version**, and
-**Review permissions** (Drive + Sheets) when Google prompts. Then tap
-**Refresh** in the app — it should briefly show `1 photo` (or `0 photos` /
-`No Image col` if something is still wrong).
+**Also works without conversion:** paste a Drive/https link in the Image cell,
+or add a **Photo URL** column with the link.
 
-Phone photos are copied to a Drive folder (`QR Smart Cabinet Photos`) and the
-app loads that link. That avoids silent drops when images are larger than ~750KB.
+Empty Image cells keep the wire placeholder.
 
-**Also works:** floating **Image over cells** on that row, `=IMAGE("https://…")`,
-plain https links, and Drive links pasted into the cell.
-
-**Debug in Apps Script:** Run `debugDrawerPhotos` (select function → Run) and
-check View → Logs for `source`, `http`, `bytes`, and `error` per drawer.
+**Debug:** Apps Script → Run `debugDrawerPhotos` → View → Logs.
 
 **Session tracker**
 
