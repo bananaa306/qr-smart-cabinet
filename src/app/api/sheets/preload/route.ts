@@ -13,7 +13,7 @@ export async function GET(req: Request) {
     return NextResponse.json({ ok: false, error: "not_configured" }, { status: 503 });
   }
 
-  const gate = rateLimit(`sheets_preload:${clientIp(req)}`, 24, 60_000);
+  const gate = rateLimit(`sheets_preload:${clientIp(req)}`, 60, 60_000);
   if (!gate.ok) {
     return NextResponse.json({ ok: false, error: "rate_limited" }, { status: 429 });
   }
@@ -25,6 +25,10 @@ export async function GET(req: Request) {
   after(() => {
     void pullStockFromSheets({ force: true, timeoutMs: 20000 });
   });
+
+  // Also start the pull immediately so this isolate is warming before the
+  // response is flushed (helps when the user continues within a second).
+  void pullStockFromSheets({ force: true, timeoutMs: 20000 });
 
   return NextResponse.json({ ok: true, fresh: false, warming: true });
 }

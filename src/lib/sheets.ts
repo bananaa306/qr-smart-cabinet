@@ -18,7 +18,7 @@ const WEBHOOK_URL = process.env.SHEETS_WEBHOOK_URL;
 const SECRET = process.env.SHEETS_SECRET;
 
 /** Reuse a successful pull within the same Fluid instance. */
-const PULL_CACHE_MS = 30_000;
+const PULL_CACHE_MS = 120_000;
 let lastPullAt = 0;
 let lastPullOk = false;
 let inflightPull: Promise<{ ok: boolean; error?: string; count?: number }> | null =
@@ -342,8 +342,19 @@ export async function pullStockFromSheets(opts?: {
 export async function warmSheets(): Promise<{ ok: boolean; error?: string; ms: number }> {
   if (!sheetsEnabled()) return { ok: false, error: "not_configured", ms: 0 };
   const started = Date.now();
-  const result = await pullStockFromSheets({ force: true, timeoutMs: 20000 });
-  return { ok: result.ok, error: result.error, ms: Date.now() - started };
+  // Prefer a real light inventory so this isolate also has fresh stock cached.
+  const result = await pullStockFromSheets({ force: true, timeoutMs: 25000 });
+  if (!result.ok) {
+    // Fall back to a tiny ping so the script process stays awake.
+    const ping = await postToSheets(
+      { secret: SECRET, type: "ping" },
+      { timeoutMs: 12000 },
+    );
+    if (!ping) {
+      return { ok: false, error: result.error ?? "fetch_failed", ms: Date.now() - started };
+    }
+  }
+  return { ok: true, ms: Date.now() - started };
 }
 
 function applySheetRowsToStore(rows: SheetDrawerRow[]) {

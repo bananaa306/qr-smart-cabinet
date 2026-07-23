@@ -37,10 +37,13 @@ function doPost(e) {
       // Use set_quantity for take/return stock updates only.
       return json_({ ok: false, error: 'snapshot_disabled' });
     }
+    if (body.type === 'ping') {
+      return json_({ ok: true, pong: true, ts: Date.now() });
+    }
     if (body.type === 'inventory') {
       var table = locateTable_();
-      // Default: light pull (qty/part/locked + cheap IMAGE/URL only).
-      // includePhotos: true does Drive/CellImage work (Refresh / sync).
+      // Default: light pull (qty/part/locked only — fastest).
+      // includePhotos: true reads Image column (Refresh / sync).
       var drawers = readInventory_({ includeHeavyPhotos: !!body.includePhotos });
       var withPhoto = 0;
       for (var di = 0; di < drawers.length; di++) {
@@ -160,29 +163,23 @@ function readInventory_(opts) {
       }
     }
     var sheetRow = t.headerRow + 1 + i;
-    var photo = '';
-    var hasPhotoField = false;
-    if (t.col.imageUrl) {
-      photo = readCheapImageUrl_(String(row[t.col.imageUrl - 1] || '').trim());
-      hasPhotoField = includeHeavyPhotos || Boolean(photo);
-    }
-    if (!photo && t.col.image) {
-      if (includeHeavyPhotos) {
-        photo = readCellImageUrl_(t.sheet, sheetRow, t.col.image);
-        hasPhotoField = true;
-      } else {
-        photo = readCellImageUrlLight_(t.sheet, sheetRow, t.col.image);
-        if (photo) hasPhotoField = true;
-      }
-    }
     var entry = {
       number: number,
       part: part,
       quantity: quantity,
       locked: locked,
     };
-    // Omit photo on light pulls when unknown so the app keeps the last good URL.
-    if (hasPhotoField) entry.photo = photo;
+    // Light pulls skip Image entirely (big speed win). Photos load on Refresh.
+    if (includeHeavyPhotos) {
+      var photo = '';
+      if (t.col.imageUrl) {
+        photo = readCheapImageUrl_(String(row[t.col.imageUrl - 1] || '').trim());
+      }
+      if (!photo && t.col.image) {
+        photo = readCellImageUrl_(t.sheet, sheetRow, t.col.image);
+      }
+      entry.photo = photo;
+    }
     drawers.push(entry);
   }
   return drawers;

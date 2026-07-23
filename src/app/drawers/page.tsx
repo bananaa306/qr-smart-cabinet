@@ -194,6 +194,9 @@ function DrawersPageInner() {
 
   useEffect(() => {
     let cancelled = false;
+    // Kick a background warm on this page's isolate immediately.
+    void fetch("/api/sheets/preload", { credentials: "same-origin", cache: "no-store" });
+
     void (async () => {
       const first = await fetchCabinet();
       if (cancelled || !first) return;
@@ -201,14 +204,18 @@ function DrawersPageInner() {
       setSheets(first.sheets);
       setReady(true);
 
-      // One quiet follow-up if the sheet is still warming — don't spam the menu.
       if (!first.sheets || first.sheetsFresh) return;
-      await new Promise((r) => setTimeout(r, 1200));
-      if (cancelled) return;
-      const next = await fetchCabinet();
-      if (!next) return;
-      setDrawers(applyLockHold(next.drawers));
-      setSheets(next.sheets);
+
+      // Quietly keep asking until the sheet lands (cold Apps Script is slow).
+      for (let i = 0; i < 20; i++) {
+        await new Promise((r) => setTimeout(r, 750));
+        if (cancelled) return;
+        const next = await fetchCabinet();
+        if (!next) return;
+        setDrawers(applyLockHold(next.drawers));
+        setSheets(next.sheets);
+        if (next.sheetsFresh) return;
+      }
     })();
     api<{ user: { name: string } | null }>("/api/auth/me").then(({ ok, data }) => {
       if (ok && data.user?.name) {

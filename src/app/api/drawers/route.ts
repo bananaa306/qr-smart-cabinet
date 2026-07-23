@@ -16,11 +16,12 @@ export async function GET() {
   if (!user) return NextResponse.json({ error: "unauthenticated" }, { status: 401 });
 
   // Never block the menu on Apps Script. Return in-memory stock immediately and
-  // refresh from the sheet in the background.
+  // start a background refresh on THIS isolate right away (after() keeps it alive).
   const fresh = sheetsCacheFresh();
   if (sheetsEnabled() && !fresh) {
+    const warming = pullStockFromSheets({ force: true, timeoutMs: 20000 });
     after(() => {
-      void pullStockFromSheets({ force: true, timeoutMs: 20000 });
+      void warming;
     });
   }
 
