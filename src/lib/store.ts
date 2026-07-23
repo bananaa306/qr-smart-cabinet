@@ -130,8 +130,7 @@ export function seed() {
   items.forEach((i) => db.items.set(i.id, i));
 
   // Nine drawers in one cabinet — a 3×3 grid on the main menu. Fixed opaque ids
-  // + friendly short codes so the demo is reproducible. One drawer is left low,
-  // one empty, and one disabled to exercise every card state.
+  // + friendly short codes so the demo is reproducible.
   const drawerSeed: Array<
     Pick<Drawer, "id" | "shortCode" | "label" | "itemId" | "status"> & { qty: number }
   > = [
@@ -143,7 +142,7 @@ export function seed() {
     { id: "a1c0de00000000000000000000000006", shortCode: "A6-5T7", label: "Drawer 6", itemId: "it_fiber", status: "active", qty: 22 },
     { id: "a1c0de00000000000000000000000007", shortCode: "A7-9W3", label: "Drawer 7", itemId: "it_ties", status: "active", qty: 3 },
     { id: "a1c0de00000000000000000000000008", shortCode: "A8-1Y6", label: "Drawer 8", itemId: "it_velcro", status: "active", qty: 40 },
-    { id: "a1c0de00000000000000000000000009", shortCode: "A9-4Z8", label: "Drawer 9", itemId: "it_rj45", status: "disabled", qty: 0 },
+    { id: "a1c0de00000000000000000000000009", shortCode: "A9-4Z8", label: "Drawer 9", itemId: "it_rj45", status: "active", qty: 45 },
   ];
   const drawers: Array<Drawer & { qty: number }> = drawerSeed.map((d) => ({
     ...d,
